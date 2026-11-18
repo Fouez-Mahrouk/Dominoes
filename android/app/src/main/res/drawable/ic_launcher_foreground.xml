@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Ivory domino tile silhouette -->
+    <path
+        android:fillColor="#FAF8F4"
+        android:pathData="M40,22h28c3.3,0 6,2.7 6,6v52c0,3.3 -2.7,6 -6,6H40c-3.3,0 -6,-2.7 -6,-6V28C34,24.7 36.7,22 40,22z" />
+    <!-- Center divider line -->
+    <path
+        android:fillColor="#0F766E"
+        android:pathData="M39,53h30v2H39z" />
+    <!-- Top pips (5) -->
+    <path
+        android:fillColor="#171A21"
+        android:pathData="M45,30a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z M63,30a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z M54,37a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z M45,44a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z M63,44a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z" />
+    <!-- Bottom pips (3) -->
+    <path
+        android:fillColor="#0F766E"
+        android:pathData="M45,61a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z M54,68a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z M63,75a3,3 0 1,0 0,6a3,3 0 1,0 0,-6z" />
+</vector>
