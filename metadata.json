@@ -1,0 +1,6 @@
+{
+  "name": "Dominoes Studio",
+  "description": "Offline Material 3 Dominoes with Block, All Fives, All Threes, and Fives & Threes modes, smart AI opponents, pass-and-play, and haptic feedback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
