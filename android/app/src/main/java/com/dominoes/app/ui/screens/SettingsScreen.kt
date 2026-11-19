@@ -2,6 +2,7 @@ package com.dominoes.app.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeUp
@@ -37,7 +39,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dominoes.app.model.Difficulty
@@ -59,6 +63,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalDominoPalette.current
+    val uriHandler = LocalUriHandler.current
     var confirmReset by remember { mutableStateOf(false) }
 
     Column(
@@ -307,6 +312,56 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.size(6.dp))
                         Text("Reset Scores & Saved Match", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
+                }
+            }
+        }
+
+        // About
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = palette.surfaceCard,
+            border = BorderStroke(1.dp, palette.divider),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "About",
+                    color = palette.textPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Dominoes by Fouez Mahrouk",
+                    color = palette.textPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                val linkColor = if (palette.isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
+                val repoUrl = "https://github.com/Fouez-Mahrouk/Dominoes"
+                Row(
+                    modifier = Modifier
+                        .clickable { uriHandler.openUri(repoUrl) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = repoUrl,
+                        color = linkColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.OpenInNew,
+                        contentDescription = "Open GitHub repository",
+                        tint = linkColor,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }

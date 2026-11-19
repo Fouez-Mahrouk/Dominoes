@@ -3,6 +3,7 @@ package com.dominoes.app.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PlayArrow
@@ -85,292 +84,286 @@ fun ModeStartScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(palette.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Centered Title & Designer Credit ("Fouez Mahrouk")
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Centered Title ("Dominoes" only)
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
             ) {
                 DominoTileCanvas(
                     tile = DominoTile("logo-5-3", 5, 3),
                     orientation = TileOrientation.VERTICAL,
-                    width = 24.dp,
-                    height = 48.dp
+                    width = 20.dp,
+                    height = 40.dp
                 )
                 Text(
                     text = "Dominoes",
                     color = palette.textPrimary,
-                    fontSize = 34.sp,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.5).sp
                 )
             }
-            Spacer(modifier = Modifier.height(5.dp))
-            Text(
-                text = "Fouez Mahrouk",
-                color = palette.textPrimary.copy(alpha = 0.60f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 1.2.sp
-            )
-        }
 
-        // Resume Unfinished Match Card
-        if (savedMatch != null) {
-            val savedRoundBased = DominoEngine.isRoundBasedMode(savedMatch.mode)
+            // Resume Unfinished Match Card
+            if (savedMatch != null) {
+                val savedRoundBased = DominoEngine.isRoundBasedMode(savedMatch.mode)
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = palette.surfaceCard,
+                    border = BorderStroke(1.dp, palette.accentTeal.copy(alpha = 0.30f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${DominoEngine.metaFor(savedMatch.mode).name} · R${savedMatch.roundNumber}",
+                                color = palette.textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val scoresStr = savedMatch.players.joinToString(" · ") { p ->
+                                if (savedRoundBased) "${p.name} ${p.roundsWon}" else "${p.name} ${p.score}"
+                            }
+                            Text(
+                                text = scoresStr,
+                                color = palette.textSecondary,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            IconButton(
+                                onClick = onDiscardSavedMatch,
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.DeleteOutline,
+                                    contentDescription = "Discard saved match",
+                                    tint = palette.textSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Button(
+                                onClick = onResumeMatch,
+                                modifier = Modifier.height(34.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = palette.accentTeal,
+                                    contentColor = palette.onAccentTeal
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.size(4.dp))
+                                Text("Resume", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Mode Picker: Free Game full width first, then 2x2 grid
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Mode",
+                    color = palette.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                ModeOptionButton(
+                    label = DominoEngine.metaFor(GameMode.FREE_GAME).name,
+                    selected = selectedMode == GameMode.FREE_GAME,
+                    onClick = { selectMode(GameMode.FREE_GAME) },
+                    isFeatured = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                SecondaryModes.chunked(2).forEach { rowModes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowModes.forEach { mode ->
+                            ModeOptionButton(
+                                label = DominoEngine.metaFor(mode).name,
+                                selected = selectedMode == mode,
+                                onClick = { selectMode(mode) },
+                                isFeatured = false,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Match Options Card: Players, Target, AI Level
             Surface(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = palette.surfaceCard,
-                border = BorderStroke(1.dp, palette.accentTeal.copy(alpha = 0.30f)),
+                border = BorderStroke(1.dp, palette.divider),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Players
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(
-                            text = "${DominoEngine.metaFor(savedMatch.mode).name} · Round ${savedMatch.roundNumber}",
-                            color = palette.textPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        val scoresStr = savedMatch.players.joinToString(" · ") { p ->
-                            if (savedRoundBased) "${p.name} ${p.roundsWon}" else "${p.name} ${p.score}"
-                        }
-                        Text(
-                            text = scoresStr,
+                            text = "Players",
                             color = palette.textSecondary,
                             fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            fontWeight = FontWeight.SemiBold
                         )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        IconButton(onClick = onDiscardSavedMatch) {
-                            Icon(
-                                imageVector = Icons.Filled.DeleteOutline,
-                                contentDescription = "Discard saved match",
-                                tint = palette.textSecondary
-                            )
-                        }
-                        Button(
-                            onClick = onResumeMatch,
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = palette.accentTeal,
-                                contentColor = palette.onAccentTeal
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.size(6.dp))
-                            Text("Resume", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Mode Picker: Free Game full width first, then 2x2 grid
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = "Mode",
-                color = palette.textSecondary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            // Featured Free Game spanning full width of the two columns beneath
-            ModeOptionButton(
-                label = DominoEngine.metaFor(GameMode.FREE_GAME).name,
-                selected = selectedMode == GameMode.FREE_GAME,
-                onClick = { selectMode(GameMode.FREE_GAME) },
-                isFeatured = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            SecondaryModes.chunked(2).forEach { rowModes ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    rowModes.forEach { mode ->
-                        ModeOptionButton(
-                            label = DominoEngine.metaFor(mode).name,
-                            selected = selectedMode == mode,
-                            onClick = { selectMode(mode) },
-                            isFeatured = false,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Match Options Card: Players, Target, AI Level
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = palette.surfaceCard,
-            border = BorderStroke(1.dp, palette.divider),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Players
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Players",
-                        color = palette.textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(2, 3, 4).forEach { count ->
-                            SelectorChip(
-                                label = "$count Players",
-                                selected = playerCount == count,
-                                onClick = {
-                                    playerCount = count
-                                    if (count != 4) passAndPlay = false
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
-                    if (playerCount == 4) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            AccentChip(
-                                label = "1 Human + 3 AI",
-                                selected = !passAndPlay,
-                                onClick = { passAndPlay = false },
-                                modifier = Modifier.weight(1f)
-                            )
-                            AccentChip(
-                                label = "Pass & Play",
-                                selected = passAndPlay,
-                                onClick = { passAndPlay = true },
-                                modifier = Modifier.weight(1f)
-                            )
+                            listOf(2, 3, 4).forEach { count ->
+                                SelectorChip(
+                                    label = "$count Players",
+                                    selected = playerCount == count,
+                                    onClick = {
+                                        playerCount = count
+                                        if (count != 4) passAndPlay = false
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        if (playerCount == 4) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                AccentChip(
+                                    label = "1 Human + 3 AI",
+                                    selected = !passAndPlay,
+                                    onClick = { passAndPlay = false },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                AccentChip(
+                                    label = "Pass & Play",
+                                    selected = passAndPlay,
+                                    onClick = { passAndPlay = true },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
-                }
 
-                // Dynamic Target Picker ("Rounds to Win" vs "Target Score")
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = if (roundBased) "Rounds to Win" else "Target Score",
-                        color = palette.textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        targetOptions.forEach { value ->
-                            SelectorChip(
-                                label = "$value",
-                                selected = targetScore == value,
-                                onClick = { targetScore = value },
-                                modifier = Modifier.weight(1f)
-                            )
+                    // Dynamic Target Picker ("Rounds to Win" vs "Target Score")
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(
+                            text = if (roundBased) "Rounds to Win" else "Target Score",
+                            color = palette.textSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            targetOptions.forEach { value ->
+                                SelectorChip(
+                                    label = "$value",
+                                    selected = targetScore == value,
+                                    onClick = { targetScore = value },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
-                }
 
-                // AI Difficulty
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "AI Level",
-                        color = palette.textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Difficulty.entries.forEach { diff ->
-                            SelectorChip(
-                                label = diff.label,
-                                selected = difficulty == diff,
-                                onClick = { difficulty = diff },
-                                modifier = Modifier.weight(1f)
-                            )
+                    // AI Difficulty
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(
+                            text = "AI Level",
+                            color = palette.textSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Difficulty.entries.forEach { diff ->
+                                SelectorChip(
+                                    label = diff.label,
+                                    selected = difficulty == diff,
+                                    onClick = { difficulty = diff },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // Start Match CTA
-        Button(
-            onClick = {
-                onStartMatch(
-                    selectedMode,
-                    playerCount,
-                    playerCount == 4 && passAndPlay,
-                    targetScore,
-                    difficulty
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Start Game CTA
+            Button(
+                onClick = {
+                    onStartMatch(
+                        selectedMode,
+                        playerCount,
+                        playerCount == 4 && passAndPlay,
+                        targetScore,
+                        difficulty
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.accentTeal,
+                    contentColor = palette.onAccentTeal
                 )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = palette.accentTeal,
-                contentColor = palette.onAccentTeal
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(
-                text = "Start Match",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.size(6.dp))
+                Text(
+                    text = "Start Game",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
@@ -385,23 +378,23 @@ private fun ModeOptionButton(
     val palette = LocalDominoPalette.current
     Surface(
         onClick = onClick,
-        modifier = modifier.height(if (isFeatured) 62.dp else 56.dp),
-        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.height(if (isFeatured) 48.dp else 44.dp),
+        shape = RoundedCornerShape(14.dp),
         color = if (selected) palette.textPrimary else palette.surfaceCard,
         border = BorderStroke(1.dp, if (selected) palette.textPrimary else palette.divider),
-        shadowElevation = if (selected) 3.dp else 0.dp
+        shadowElevation = if (selected) 2.dp else 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp),
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
                 text = label,
                 color = if (selected) palette.background else palette.textPrimary,
-                fontSize = if (isFeatured) 19.sp else 16.sp,
+                fontSize = if (isFeatured) 17.sp else 14.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -420,8 +413,8 @@ private fun SelectorChip(
     val palette = LocalDominoPalette.current
     Surface(
         onClick = onClick,
-        modifier = modifier.height(44.dp),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.height(38.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (selected) palette.textPrimary else palette.background.copy(alpha = 0.65f),
         shadowElevation = if (selected) 2.dp else 0.dp
     ) {
@@ -433,7 +426,7 @@ private fun SelectorChip(
             Text(
                 text = label,
                 color = if (selected) palette.background else palette.textSecondary,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1
             )
@@ -451,8 +444,8 @@ private fun AccentChip(
     val palette = LocalDominoPalette.current
     Surface(
         onClick = onClick,
-        modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.height(34.dp),
+        shape = RoundedCornerShape(10.dp),
         color = if (selected) palette.accentTeal else palette.background.copy(alpha = 0.55f)
     ) {
         Row(
