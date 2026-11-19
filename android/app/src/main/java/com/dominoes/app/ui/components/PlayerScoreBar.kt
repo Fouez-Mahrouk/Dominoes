@@ -2,9 +2,13 @@ package com.dominoes.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -183,15 +187,24 @@ fun PlayerScoreBar(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = player.name,
-                                            color = palette.textPrimary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false)
-                                        )
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Text(
+                                                text = player.name,
+                                                color = palette.textPrimary,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            if (isActive && player.isAI && isAIThinking && !isRoundWinner) {
+                                                ThinkingPulseDot(color = palette.accentTeal)
+                                            }
+                                        }
                                         Text(
                                             text = "$currentValue/$targetScore",
                                             color = palette.textPrimary,
@@ -238,6 +251,27 @@ fun PlayerScoreBar(
             }
         }
     }
+}
+
+@Composable
+private fun ThinkingPulseDot(color: Color) {
+    val transition = rememberInfiniteTransition(label = "aiThinkingDot")
+    val alpha by transition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 550),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "aiThinkingDotAlpha"
+    )
+    Box(
+        modifier = Modifier
+            .size(6.dp)
+            .graphicsLayer { this.alpha = alpha }
+            .clip(CircleShape)
+            .background(color)
+    )
 }
 
 @Composable

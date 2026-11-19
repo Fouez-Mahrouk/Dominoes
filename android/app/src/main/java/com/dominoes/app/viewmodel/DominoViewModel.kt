@@ -70,6 +70,7 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
     private var celebrationJob: Job? = null
     private var celebratedRoundKey: String? = null
     private var recordedMatchEnd = false
+    private var pendingPostAIMoveState: MatchState? = null
 
     fun selectTab(tab: NavTab) {
         _activeTab.value = tab
@@ -111,6 +112,7 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
         targetScore: Int,
         difficulty: Difficulty
     ) {
+        pendingPostAIMoveState = null
         recordedMatchEnd = false
         celebratedRoundKey = null
         val fresh = DominoEngine.createNewMatch(
@@ -129,6 +131,7 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
 
     fun resumeSavedMatch() {
         val saved = _savedMatch.value ?: return
+        pendingPostAIMoveState = null
         recordedMatchEnd = false
         celebratedRoundKey = null
         setMatchState(saved)
@@ -161,6 +164,7 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun quitToMenuImmediate() {
+        pendingPostAIMoveState = null
         aiJob?.cancel()
         celebrationJob?.cancel()
         _match.value = null
@@ -226,6 +230,7 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
 
     fun playAgain() {
         val cur = _match.value ?: return
+        pendingPostAIMoveState = null
         recordedMatchEnd = false
         celebratedRoundKey = null
         val fresh = DominoEngine.createNewMatch(
@@ -246,8 +251,9 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
         quitToMenuImmediate()
     }
 
-    private fun setMatchState(next: MatchState) {
+    private fun setMatchState(next: MatchState, persist: Boolean = true) {
         _match.value = next
+        if (!persist) return
         storage.saveMatch(next)
         _savedMatch.value = if (next.phase != GamePhase.GAME_OVER) next else null
 
@@ -332,6 +338,13 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
             _isCelebratingRound.value = false
         }
 
+        pendingPostAIMoveState?.let { pending ->
+            pendingPostAIMoveState = null
+            setMatchState(pending)
+            evaluateSideEffects()
+            return
+        }
+
         // AI turn execution
         aiJob?.cancel()
         val currentPlayer = cur.players.getOrNull(cur.currentPlayerIndex)
@@ -342,27 +355,56 @@ class DominoViewModel(application: Application) : AndroidViewModel(application) 
             currentPlayer.isAI
         ) {
             _isAIThinking.value = true
-            val thinkDelay = if (cur.moveSequence == 0) 550L else 720L
+            val thinkDelay = when (cur.difficulty) {
+                Difficulty.EASY -> 2000L
+                Difficulty.MEDIUM -> 1500L
+                Difficulty.HARD -> 1000L
+            }
             aiJob = viewModelScope.launch {
                 delay(thinkDelay)
-                val latest = _match.value ?: return@launch
-                if (latest.phase != GamePhase.PLAYING) return@launch
-                val active = latest.players.getOrNull(latest.currentPlayerIndex) ?: return@launch
-                if (!active.isAI) return@launch
 
-                when (val decision = DominoEngine.chooseAIMove(latest)) {
-                    AIDecision.Draw -> {
-                        sound.playDraw(_settings.value.soundEnabled)
-                        setMatchState(DominoEngine.drawTileFromBoneyard(latest))
-                    }
-                    AIDecision.Pass -> {
-                        sound.playPass(_settings.value.soundEnabled)
-                        setMatchState(DominoEngine.passCurrentTurn(latest))
-                    }
-                    is AIDecision.Play -> {
-                        val next = DominoEngine.applyMove(latest, decision.move.tile.id, decision.move.target)
-                        playTransitionFeedback(latest, next)
-                        setMatchState(next)
+                while (true) {
+                    val latest = _match.value ?: return@launch
+                    if (latest.phase != GamePhase.PLAYING) return@launch
+                    val active = latest.players.getOrNull(latest.currentPlayerIndex) ?: return@launch
+                    if (!active.isAI) return@launch
+
+                    when (val decision = DominoEngine.chooseAIMove(latest)) {
+                        AIDecision.Draw -> {
+                            sound.playDraw(_settings.value.soundEnabled)
+                            setMatchState(DominoEngine.drawTileFromBoneyard(latest))
+                            delay(500L)
+                        }
+                        AIDecision.Pass -> {
+                            val next = DominoEngine.passCurrentTurn(latest)
+                            _isAIThinking.value = false
+                            sound.playPass(_settings.value.soundEnabled)
+                            val holding = next.copy(
+                                phase = GamePhase.PLAYING,
+                                currentPlayerIndex = latest.currentPlayerIndex
+                            )
+                            pendingPostAIMoveState = next
+                            setMatchState(holding, persist = false)
+                            delay(800L)
+                            pendingPostAIMoveState = null
+                            setMatchState(next)
+                            break
+                        }
+                        is AIDecision.Play -> {
+                            val next = DominoEngine.applyMove(latest, decision.move.tile.id, decision.move.target)
+                            _isAIThinking.value = false
+                            val holding = next.copy(
+                                phase = GamePhase.PLAYING,
+                                currentPlayerIndex = latest.currentPlayerIndex
+                            )
+                            pendingPostAIMoveState = next
+                            playTransitionFeedback(latest, next)
+                            setMatchState(holding, persist = false)
+                            delay(1200L)
+                            pendingPostAIMoveState = null
+                            setMatchState(next)
+                            break
+                        }
                     }
                 }
                 evaluateSideEffects()

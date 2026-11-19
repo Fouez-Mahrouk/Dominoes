@@ -2,9 +2,11 @@ package com.dominoes.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -476,15 +478,31 @@ fun GameBoardScreen(
                                 val wDp = (pos.width * smoothScale).dp
                                 val hDp = (pos.height * smoothScale).dp
 
+                                val slideOffsetY = remember(pos.placed.tile.id) {
+                                    Animatable(if (isNew) with(density) { (-22).dp.toPx() } else 0f)
+                                }
                                 val appearScale = remember(pos.placed.tile.id) {
                                     Animatable(if (isNew) 0.72f else 1f)
                                 }
                                 LaunchedEffect(pos.placed.tile.id) {
                                     if (isNew) {
-                                        appearScale.animateTo(
-                                            1f,
-                                            spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = 0.7f)
-                                        )
+                                        launch {
+                                            slideOffsetY.animateTo(
+                                                0f,
+                                                tween(durationMillis = 400, easing = FastOutSlowInEasing)
+                                            )
+                                        }
+                                        launch {
+                                            appearScale.animateTo(
+                                                1f,
+                                                keyframes {
+                                                    durationMillis = 400
+                                                    0.72f at 0
+                                                    1.12f at 260
+                                                    1.0f at 400
+                                                }
+                                            )
+                                        }
                                     }
                                 }
 
@@ -497,6 +515,7 @@ fun GameBoardScreen(
                                     modifier = Modifier
                                         .offset(x = txDp, y = tyDp)
                                         .graphicsLayer {
+                                            translationY = slideOffsetY.value
                                             scaleX = appearScale.value
                                             scaleY = appearScale.value
                                         }
