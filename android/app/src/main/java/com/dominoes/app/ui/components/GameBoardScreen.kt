@@ -501,11 +501,6 @@ fun GameBoardScreen(
                                         previewPlayScore(match.board, match.mode, selectedHandTile, dz.end)
                                     }
                                 }
-                                var cachedHintScore by remember { mutableStateOf(0) }
-                                if (hintScore > 0) {
-                                    cachedHintScore = hintScore
-                                }
-
                                 val badgeOffsetX = when (dz.heading) {
                                     Heading.E -> (dz.width / 2f + 16f).dp
                                     Heading.W -> -(dz.width / 2f + 16f).dp
@@ -517,35 +512,12 @@ fun GameBoardScreen(
                                     else -> 0.dp
                                 }
 
-                                AnimatedVisibility(
-                                    visible = hintScore > 0,
-                                    enter = fadeIn(tween(durationMillis = 150)),
-                                    exit = fadeOut(tween(durationMillis = 150)),
+                                ScoreHintBadge(
+                                    score = hintScore,
                                     modifier = Modifier
                                         .offset(x = dz.x.dp + badgeOffsetX, y = dz.y.dp + badgeOffsetY)
                                         .zIndex(15f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .height(22.dp)
-                                            .wrapContentWidth()
-                                            .clip(RoundedCornerShape(50))
-                                            .background(
-                                                if (palette.isDark) Color.White.copy(alpha = 0.70f)
-                                                else Color.Black.copy(alpha = 0.70f)
-                                            )
-                                            .padding(horizontal = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "$cachedHintScore",
-                                            color = if (palette.isDark) Color.Black else Color.White,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
+                                )
                             }
                         }
 
@@ -982,6 +954,46 @@ private fun RoundWinCelebrationOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ScoreHintBadge(
+    score: Int,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalDominoPalette.current
+    var cachedHintScore by remember { mutableStateOf(score) }
+    if (score > 0) {
+        cachedHintScore = score
+    }
+
+    AnimatedVisibility(
+        visible = score > 0,
+        enter = fadeIn(tween(durationMillis = 150)),
+        exit = fadeOut(tween(durationMillis = 150)),
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .height(22.dp)
+                .wrapContentWidth()
+                .clip(RoundedCornerShape(50))
+                .background(
+                    if (palette.isDark) Color.White.copy(alpha = 0.70f)
+                    else Color.Black.copy(alpha = 0.70f)
+                )
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "$cachedHintScore",
+                color = if (palette.isDark) Color.Black else Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
         }
     }
 }
