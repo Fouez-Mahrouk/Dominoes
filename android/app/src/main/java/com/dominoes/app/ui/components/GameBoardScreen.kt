@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -51,6 +50,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,14 +79,12 @@ import com.dominoes.app.model.GamePhase
 import com.dominoes.app.model.MatchState
 import com.dominoes.app.model.PlayTarget
 import com.dominoes.app.model.RoundWinCelebration
-import com.dominoes.app.model.ScoringEvent
 import com.dominoes.app.ui.theme.LocalDominoPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -117,8 +115,12 @@ fun GameBoardScreen(
     var draggingTile by remember { mutableStateOf<DominoTile?>(null) }
     var dragRootCenter by remember { mutableStateOf(Offset.Zero) }
     var hoveredTarget by remember { mutableStateOf<PlayTarget?>(null) }
-    var activeScoreBanner by remember { mutableStateOf<ScoringEvent?>(null) }
+    var scoreCounter by remember { mutableStateOf(0) }
+    var scoreEvent by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
+    val scope = rememberCoroutineScope()
+    val cameraX = remember { Animatable(0f) }
+    val cameraY = remember { Animatable(0f) }
     val dropZoneCenters = remember { mutableStateMapOf<PlayTarget, Offset>() }
 
     LaunchedEffect(match.currentPlayerIndex, match.moveSequence, match.roundNumber) {
@@ -130,15 +132,30 @@ fun GameBoardScreen(
     LaunchedEffect(match.lastScoringEvent?.id) {
         val event = match.lastScoringEvent
         if (event != null) {
-            activeScoreBanner = event
-            delay(1500L)
-            activeScoreBanner = null
+            scoreCounter += 1
+            scoreEvent = scoreCounter to "+${event.points}"
         }
     }
 
     val displayedPlayer = if (currentPlayer.isAI) match.players.first() else currentPlayer
     val layout = remember(match.board, match.mode) {
         BoardLayout.compute(match.board, match.mode)
+    }
+
+    LaunchedEffect(match.lastPlayedTileId, match.moveSequence, match.roundNumber) {
+        val lastId = match.lastPlayedTileId
+        if (match.board.root == null || lastId == null) {
+            scope.launch { cameraX.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+            scope.launch { cameraY.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+        } else {
+            val targetTile = layout.tiles.find { it.placed.tile.id == lastId }
+            if (targetTile != null) {
+                val targetX = -with(density) { targetTile.x.dp.toPx() }
+                val targetY = -with(density) { targetTile.y.dp.toPx() }
+                scope.launch { cameraX.animateTo(targetX, tween(300, easing = FastOutSlowInEasing)) }
+                scope.launch { cameraY.animateTo(targetY, tween(300, easing = FastOutSlowInEasing)) }
+            }
+        }
     }
     val openEnds = remember(match.board, match.mode) {
         DominoEngine.getOpenEnds(match.board, match.mode)
@@ -329,51 +346,23 @@ fun GameBoardScreen(
                 roundWinnerId = roundWinCelebration?.winnerId
             )
 
-            // Center Board Tabletop
-            BoxWithConstraints(
+            // Center Board Tabletop (Pan-only, scale fixed at 1.0f)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .clip(RoundedCornerShape(24.dp))
                     .background(palette.boardWell)
-            ) {
-                val boardWidthDp = maxWidth.value
-                val boardHeightDp = maxHeight.value
-
-                val targetScale = remember(boardWidthDp, boardHeightDp, layout) {
-                    val availW = (boardWidthDp - 24f).coerceAtLeast(180f)
-                    val availH = (boardHeightDp - 24f).coerceAtLeast(140f)
-                    if (layout.hasSpinner) {
-                        val sx = (availW / 2f) / layout.bounds.halfSpanX
-                        val sy = (availH / 2f) / layout.bounds.halfSpanY
-                        min(1.08f, min(sx, sy).coerceAtLeast(0.28f))
-                    } else {
-                        val sx = availW / layout.bounds.width
-                        val sy = availH / layout.bounds.height
-                        min(1.12f, min(sx, sy).coerceAtLeast(0.32f))
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            scope.launch {
+                                cameraX.snapTo(cameraX.value + dragAmount.x)
+                                cameraY.snapTo(cameraY.value + dragAmount.y)
+                            }
+                        }
                     }
-                }
-
-                val smoothScale by animateFloatAsState(
-                    targetValue = targetScale,
-                    animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = 0.85f),
-                    label = "boardZoom"
-                )
-
-                val centerOffsetX = if (layout.hasSpinner) 0f else -(layout.bounds.minX + layout.bounds.width / 2f)
-                val centerOffsetY = if (layout.hasSpinner) 0f else -(layout.bounds.minY + layout.bounds.height / 2f)
-
-                val smoothOffsetX by animateFloatAsState(
-                    targetValue = centerOffsetX,
-                    animationSpec = spring(stiffness = Spring.StiffnessLow),
-                    label = "boardCenterX"
-                )
-                val smoothOffsetY by animateFloatAsState(
-                    targetValue = centerOffsetY,
-                    animationSpec = spring(stiffness = Spring.StiffnessLow),
-                    label = "boardCenterY"
-                )
-
+            ) {
                 // Empty board root drop target
                 if (match.board.root == null) {
                     val isRootValid = validTargetsForActiveTile.contains(PlayTarget.ROOT)
@@ -413,9 +402,16 @@ fun GameBoardScreen(
                         )
                     }
                 } else {
-                    // Scaled board container centered at Box center
+                    // Panned board container centered at Box center (scale hardcoded to 1f)
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = 1f
+                                scaleY = 1f
+                                translationX = cameraX.value
+                                translationY = cameraY.value
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         // Drop zones on valid endpoints
@@ -424,10 +420,10 @@ fun GameBoardScreen(
                             val isValid = validTargetsForActiveTile.contains(target)
                             val isHovered = hoveredTarget == target
                             if (isValid || isHovered) {
-                                val dxDp = ((dz.x + smoothOffsetX) * smoothScale).dp
-                                val dyDp = ((dz.y + smoothOffsetY) * smoothScale).dp
-                                val wDp = (dz.width * smoothScale).dp
-                                val hDp = (dz.height * smoothScale).dp
+                                val dxDp = dz.x.dp
+                                val dyDp = dz.y.dp
+                                val wDp = dz.width.dp
+                                val hDp = dz.height.dp
 
                                 Box(
                                     modifier = Modifier
@@ -462,7 +458,7 @@ fun GameBoardScreen(
                                     Text(
                                         text = "${dz.end.requiredPip}",
                                         color = palette.accentTeal,
-                                        fontSize = (11f * smoothScale).coerceAtLeast(8f).sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -473,10 +469,10 @@ fun GameBoardScreen(
                         layout.tiles.forEach { pos ->
                             key(pos.placed.tile.id) {
                                 val isNew = match.lastPlayedTileId == pos.placed.tile.id
-                                val txDp = ((pos.x + smoothOffsetX) * smoothScale).dp
-                                val tyDp = ((pos.y + smoothOffsetY) * smoothScale).dp
-                                val wDp = (pos.width * smoothScale).dp
-                                val hDp = (pos.height * smoothScale).dp
+                                val txDp = pos.x.dp
+                                val tyDp = pos.y.dp
+                                val wDp = pos.width.dp
+                                val hDp = pos.height.dp
 
                                 val slideOffsetY = remember(pos.placed.tile.id) {
                                     Animatable(if (isNew) with(density) { (-22).dp.toPx() } else 0f)
@@ -548,12 +544,66 @@ fun GameBoardScreen(
                     }
                 }
 
-                // Scoring glow & sparkle burst banner
-                ScoreBannerOverlay(
-                    visible = activeScoreBanner != null && roundWinCelebration == null,
-                    event = activeScoreBanner,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                // Floating score text centered in board area with guaranteed 1.2s cleanup
+                if (scoreEvent != null) {
+                    key(scoreEvent!!.first) {
+                        val scoreLabel = scoreEvent!!.second
+                        val scoreAlpha = remember { Animatable(0f) }
+                        val scoreTranslateY = remember { Animatable(20f) }
+
+                        LaunchedEffect(Unit) {
+                            launch {
+                                scoreAlpha.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = keyframes {
+                                        durationMillis = 1200
+                                        0f at 0
+                                        1f at 300
+                                        1f at 900
+                                        0f at 1200
+                                    }
+                                )
+                            }
+                            launch {
+                                scoreTranslateY.animateTo(
+                                    targetValue = -20f,
+                                    animationSpec = keyframes {
+                                        durationMillis = 1200
+                                        20f at 0
+                                        0f at 300
+                                        0f at 900
+                                        -20f at 1200
+                                    }
+                                )
+                            }
+                            delay(1200L)
+                            scoreEvent = null
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .zIndex(25f)
+                                .offset(y = scoreTranslateY.value.dp)
+                                .graphicsLayer { alpha = scoreAlpha.value },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = palette.accentTeal,
+                                shadowElevation = 8.dp
+                            ) {
+                                Text(
+                                    text = scoreLabel,
+                                    color = palette.onAccentTeal,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
 
                 // Celebratory Round-Win Tabletop Overlay across all modes
                 RoundWinCelebrationOverlay(
@@ -780,49 +830,6 @@ private fun SparkleBurstCanvas(color: Color, radiusDp: Float = 64f) {
                 radius = 4.dp.toPx() * (1f - progress.value * 0.4f),
                 center = Offset(px, py)
             )
-        }
-    }
-}
-
-@Composable
-private fun ScoreBannerOverlay(
-    visible: Boolean,
-    event: ScoringEvent?,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalDominoPalette.current
-    AnimatedVisibility(
-        visible = visible,
-        enter = scaleIn() + fadeIn(),
-        exit = fadeOut(),
-        modifier = modifier
-    ) {
-        event?.let { ev ->
-            Box(contentAlignment = Alignment.Center) {
-                SparkleBurstCanvas(color = palette.amberHighlight)
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = palette.accentTeal,
-                    shadowElevation = 10.dp
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "+${ev.points} pts!",
-                            color = palette.onAccentTeal,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = "${ev.playerName} · ${ev.reason}",
-                            color = palette.onAccentTeal.copy(alpha = 0.9f),
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            }
         }
     }
 }
