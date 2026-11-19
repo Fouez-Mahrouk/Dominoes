@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -95,6 +96,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.random.Random
 
 private val SparkleAngles = listOf(0f, 45f, 90f, 135f, 180f, 225f, 270f, 315f)
 
@@ -450,6 +452,39 @@ fun GameBoardScreen(
                         }
                     }
             ) {
+                // Subtle felt table surface texture and top-down radial vignette
+                val feltSpecks = remember {
+                    val rng = Random(4242)
+                    List(260) {
+                        Triple(rng.nextFloat(), rng.nextFloat(), rng.nextBoolean())
+                    }
+                }
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = if (palette.isDark) 0.03f else 0.05f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = if (palette.isDark) 0.24f else 0.16f)
+                            ),
+                            center = Offset(size.width / 2f, size.height * 0.45f),
+                            radius = maxOf(size.width, size.height).coerceAtLeast(1f) * 0.72f
+                        )
+                    )
+                    val speckRadius = 0.85.dp.toPx()
+                    feltSpecks.forEach { (fx, fy, isLight) ->
+                        drawCircle(
+                            color = if (isLight) {
+                                Color.White.copy(alpha = 0.028f)
+                            } else {
+                                Color.Black.copy(alpha = 0.035f)
+                            },
+                            radius = speckRadius,
+                            center = Offset(fx * size.width, fy * size.height)
+                        )
+                    }
+                }
+
                 // Empty board root drop target
                 if (match.board.root == null) {
                     val isRootValid = validTargetsForActiveTile.contains(PlayTarget.ROOT)

@@ -115,12 +115,21 @@ object BoardLayout {
     private fun rectFor(cx: Float, cy: Float, w: Float, h: Float): PlacedRect =
         PlacedRect(cx - w / 2f, cx + w / 2f, cy - h / 2f, cy + h / 2f)
 
-    private fun overlapsAny(rect: PlacedRect, rects: List<PlacedRect>, margin: Float = 4f): Boolean =
+    private fun overlapsAny(rect: PlacedRect, rects: List<PlacedRect>, margin: Float = 2f): Boolean =
         rects.any { other ->
             rect.minX < other.maxX + margin &&
                 rect.maxX + margin > other.minX &&
                 rect.minY < other.maxY + margin &&
                 rect.maxY + margin > other.minY
+        }
+
+    private fun isAdjacentToAny(rect: PlacedRect, tileRects: List<PlacedRect>, maxGap: Float = 4f): Boolean =
+        tileRects.any { other ->
+            val overlapX = rect.minX < other.maxX && rect.maxX > other.minX
+            val overlapY = rect.minY < other.maxY && rect.maxY > other.minY
+            val closeX = rect.minX <= other.maxX + maxGap && rect.maxX + maxGap >= other.minX
+            val closeY = rect.minY <= other.maxY + maxGap && rect.maxY + maxGap >= other.minY
+            (overlapX && closeY) || (overlapY && closeX)
         }
 
     private fun turnCCW(heading: Heading): Heading = when (heading) {
@@ -197,26 +206,52 @@ object BoardLayout {
         return AdvanceResult(cx, cy, newHeading)
     }
 
-    private fun advanceUntilClear(
+    private fun advanceUntilClearAndAdjacent(
         origin: AdvanceResult,
         heading: Heading,
         dims: TileDims,
         blockers: List<PlacedRect>,
+        existingTileRects: List<PlacedRect>,
         maxSteps: Int = 20
     ): Pair<AdvanceResult, Boolean> {
-        val stepDist = (if (heading == Heading.E || heading == Heading.W) dims.width else dims.height) + 4f
-        val (dx, dy) = when (heading) {
-            Heading.E -> stepDist to 0f
-            Heading.W -> -stepDist to 0f
-            Heading.N -> 0f to -stepDist
-            Heading.S -> 0f to stepDist
-        }
         var probeX = origin.cx
         var probeY = origin.cy
+        val fallbackStep = (if (heading == Heading.E || heading == Heading.W) dims.width else dims.height) + TILE_GAP
+
         for (step in 1..maxSteps) {
-            probeX += dx
-            probeY += dy
-            if (!overlapsAny(rectFor(probeX, probeY, dims.width, dims.height), blockers, margin = 4f)) {
+            val probeRect = rectFor(probeX, probeY, dims.width, dims.height)
+            val overlapping = blockers.filter { other ->
+                probeRect.minX < other.maxX + 2f &&
+                    probeRect.maxX + 2f > other.minX &&
+                    probeRect.minY < other.maxY + 2f &&
+                    probeRect.maxY + 2f > other.minY
+            }
+            if (overlapping.isEmpty() && isAdjacentToAny(probeRect, existingTileRects, maxGap = 4f)) {
+                return AdvanceResult(probeX, probeY, heading) to true
+            }
+            // Advance just past the furthest overlapping tile along the arm so we stay attached to it instead of leaping into empty space
+            when (heading) {
+                Heading.E -> {
+                    val edge = overlapping.maxOfOrNull { it.maxX }
+                    probeX = if (edge != null) edge + TILE_GAP + dims.width / 2f else probeX + fallbackStep
+                }
+                Heading.W -> {
+                    val edge = overlapping.minOfOrNull { it.minX }
+                    probeX = if (edge != null) edge - TILE_GAP - dims.width / 2f else probeX - fallbackStep
+                }
+                Heading.N -> {
+                    val edge = overlapping.minOfOrNull { it.minY }
+                    probeY = if (edge != null) edge - TILE_GAP - dims.height / 2f else probeY - fallbackStep
+                }
+                Heading.S -> {
+                    val edge = overlapping.maxOfOrNull { it.maxY }
+                    probeY = if (edge != null) edge + TILE_GAP + dims.height / 2f else probeY + fallbackStep
+                }
+            }
+            val nextRect = rectFor(probeX, probeY, dims.width, dims.height)
+            if (!overlapsAny(nextRect, blockers, margin = 2f) &&
+                isAdjacentToAny(nextRect, existingTileRects, maxGap = 4f)
+            ) {
                 return AdvanceResult(probeX, probeY, heading) to true
             }
         }
@@ -227,6 +262,7 @@ object BoardLayout {
         cursor: CursorState,
         nextTile: PlacedTile?,
         occupiedEntries: List<Pair<String, PlacedRect>>,
+        existingTileRects: List<PlacedRect>,
         centerX: Float,
         centerY: Float,
         spinnerFallback: PositionedTile? = null
@@ -251,7 +287,9 @@ object BoardLayout {
 
         val valid = candidates.filter { (cand, _) ->
             val dims = tileDimensions(cand.heading, isDouble)
-            !overlapsAny(rectFor(cand.cx, cand.cy, dims.width, dims.height), blockers, margin = 4f)
+            val candRect = rectFor(cand.cx, cand.cy, dims.width, dims.height)
+            !overlapsAny(candRect, blockers, margin = 2f) &&
+                isAdjacentToAny(candRect, existingTileRects, maxGap = 4f)
         }
 
         if (valid.size == 1) return valid.first().first
@@ -267,9 +305,16 @@ object BoardLayout {
             }.first
         }
 
-        // All immediate candidates overlapped — advance along this arm (up to 20 steps) until clear
+        // Immediate candidates overlapped — advance along this arm staying adjacent to the chain (up to 20 steps)
         val straightDims = tileDimensions(curHeading, isDouble)
-        val (advancedResult, cleared) = advanceUntilClear(straight, curHeading, straightDims, blockers, maxSteps = 20)
+        val (advancedResult, cleared) = advanceUntilClearAndAdjacent(
+            origin = straight,
+            heading = curHeading,
+            dims = straightDims,
+            blockers = blockers,
+            existingTileRects = existingTileRects,
+            maxSteps = 20
+        )
         if (cleared) return advancedResult
 
         // Fallback to the next available arm of the spinner if the entire arm remained blocked
@@ -281,15 +326,25 @@ object BoardLayout {
                 if (altHeading == curHeading) continue
                 val altOrigin = computeCandidate(spinnerFallback, altHeading, altHeading, nextTile)
                 val altDims = tileDimensions(altHeading, isDouble)
-                if (!overlapsAny(rectFor(altOrigin.cx, altOrigin.cy, altDims.width, altDims.height), fallbackBlockers, margin = 4f)) {
+                val altRect = rectFor(altOrigin.cx, altOrigin.cy, altDims.width, altDims.height)
+                if (!overlapsAny(altRect, fallbackBlockers, margin = 2f) &&
+                    isAdjacentToAny(altRect, existingTileRects, maxGap = 4f)
+                ) {
                     return altOrigin
                 }
-                val (altAdvanced, altCleared) = advanceUntilClear(altOrigin, altHeading, altDims, fallbackBlockers, maxSteps = 20)
+                val (altAdvanced, altCleared) = advanceUntilClearAndAdjacent(
+                    origin = altOrigin,
+                    heading = altHeading,
+                    dims = altDims,
+                    blockers = fallbackBlockers,
+                    existingTileRects = existingTileRects,
+                    maxSteps = 20
+                )
                 if (altCleared) return altAdvanced
             }
         }
 
-        return advancedResult
+        return straight
     }
 
     fun compute(board: BoardBranches, mode: GameMode): BoardLayoutResult {
@@ -304,6 +359,7 @@ object BoardLayout {
         val dropZones = mutableListOf<PositionedDropZone>()
         val posById = mutableMapOf<String, PositionedTile>()
         val occupiedEntries = mutableListOf<Pair<String, PlacedRect>>()
+        val existingTileRects = mutableListOf<PlacedRect>()
 
         val rootDims = tileDimensions(Heading.E, root.isDouble)
         val rootPips = getPipsForHeading(root, Heading.E, rootDims.orientation)
@@ -319,7 +375,9 @@ object BoardLayout {
         )
         positioned.add(rootPos)
         posById[root.tile.id] = rootPos
-        occupiedEntries.add(root.tile.id to rectFor(rootPos.x, rootPos.y, rootPos.width, rootPos.height))
+        val rootRect = rectFor(rootPos.x, rootPos.y, rootPos.width, rootPos.height)
+        occupiedEntries.add(root.tile.id to rootRect)
+        existingTileRects.add(rootRect)
 
         val armCursors = mutableMapOf<BranchDir, CursorState>()
         val modeHasSpinner = DominoEngine.metaFor(mode).hasSpinner
@@ -350,8 +408,42 @@ object BoardLayout {
                         if (b != branch) add("stub_${b.name}" to r)
                     }
                 }
-                val adv = advanceCompact(cursor, placed, activeBlockers, centerX, centerY, spinnerFallback)
-                val dims = tileDimensions(adv.heading, placed.isDouble)
+                var adv = advanceCompact(cursor, placed, activeBlockers, existingTileRects, centerX, centerY, spinnerFallback)
+                var dims = tileDimensions(adv.heading, placed.isDouble)
+                var candidateRect = rectFor(adv.cx, adv.cy, dims.width, dims.height)
+
+                // Mandatory adjacency validation for every non-root tile across all modes:
+                // verify within 4dp of at least one existing tile; if not, step along arm direction (max 20 steps) until touching
+                if (!isAdjacentToAny(candidateRect, existingTileRects, maxGap = 4f)) {
+                    val stepDist = (if (adv.heading == Heading.E || adv.heading == Heading.W) dims.width else dims.height) + TILE_GAP
+                    val (backDx, backDy) = when (adv.heading) {
+                        Heading.E -> -stepDist to 0f
+                        Heading.W -> stepDist to 0f
+                        Heading.N -> 0f to stepDist
+                        Heading.S -> 0f to -stepDist
+                    }
+                    var correctedX = adv.cx
+                    var correctedY = adv.cy
+                    var attached = false
+                    for (step in 1..20) {
+                        correctedX += backDx
+                        correctedY += backDy
+                        val stepRect = rectFor(correctedX, correctedY, dims.width, dims.height)
+                        if (isAdjacentToAny(stepRect, existingTileRects, maxGap = 4f) &&
+                            !overlapsAny(stepRect, existingTileRects, margin = 2f)
+                        ) {
+                            adv = AdvanceResult(correctedX, correctedY, adv.heading)
+                            attached = true
+                            break
+                        }
+                    }
+                    if (!attached) {
+                        adv = computeCandidate(cursor.lastTile, cursor.heading, cursor.heading, placed)
+                        dims = tileDimensions(adv.heading, placed.isDouble)
+                    }
+                    candidateRect = rectFor(adv.cx, adv.cy, dims.width, dims.height)
+                }
+
                 val pips = getPipsForHeading(placed, adv.heading, dims.orientation)
                 val pos = PositionedTile(
                     placed = placed,
@@ -365,7 +457,8 @@ object BoardLayout {
                 )
                 positioned.add(pos)
                 posById[placed.tile.id] = pos
-                occupiedEntries.add(placed.tile.id to rectFor(pos.x, pos.y, pos.width, pos.height))
+                occupiedEntries.add(placed.tile.id to candidateRect)
+                existingTileRects.add(candidateRect)
                 if (modeHasSpinner && placed.tile.id == board.spinnerTileId) {
                     stubRects[BranchDir.UP] = rectFor(
                         pos.x,
@@ -426,15 +519,22 @@ object BoardLayout {
         val openEnds = DominoEngine.getOpenEnds(board, mode)
         for (end in openEnds) {
             val cursor = armCursors[end.branch] ?: continue
-            val adv = advanceCompact(
+            var adv = advanceCompact(
                 cursor,
                 null,
                 occupiedEntries,
+                existingTileRects,
                 anchorX,
                 anchorY,
                 spinnerFallback = if (hasSpinner) spinnerPos else null
             )
-            val dims = tileDimensions(adv.heading, false)
+            var dims = tileDimensions(adv.heading, false)
+            var dzRect = rectFor(adv.cx, adv.cy, dims.width, dims.height)
+            if (!isAdjacentToAny(dzRect, existingTileRects, maxGap = 4f)) {
+                adv = computeCandidate(cursor.lastTile, cursor.heading, cursor.heading, null)
+                dims = tileDimensions(adv.heading, false)
+                dzRect = rectFor(adv.cx, adv.cy, dims.width, dims.height)
+            }
             dropZones.add(
                 PositionedDropZone(
                     end = end,
@@ -445,7 +545,7 @@ object BoardLayout {
                     heading = adv.heading
                 )
             )
-            occupiedEntries.add("dz_${end.branch.name}" to rectFor(adv.cx, adv.cy, dims.width, dims.height))
+            occupiedEntries.add("dz_${end.branch.name}" to dzRect)
         }
 
         // Pin active spinner at (0, 0) so it never drifts off-center
