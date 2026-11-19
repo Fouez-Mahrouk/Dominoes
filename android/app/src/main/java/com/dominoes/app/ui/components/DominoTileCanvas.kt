@@ -63,8 +63,8 @@ fun DominoTileCanvas(
         val faceBottom = if (palette.isDark) Color(0xFFE8D5B7) else Color(0xFFF0EDE6)
         val edgeColor = if (palette.isDark) Color(0xFFC4A87A) else Color(0xFFD5CFC3)
         val subtleBorderColor = if (palette.isDark) Color(0xFF37474F) else Color(0xFFD5CFC3)
-        val pipColor = (if (palette.isDark) Color(0xFF0D1B2A) else Color(0xFF1A1A1A)).copy(alpha = alpha)
-        val divColor = (if (palette.isDark) Color(0xFF0D1B2A) else Color(0xFF1A1A1A)).copy(alpha = 0.22f * alpha)
+        val pipColor = (if (palette.isDark) Color(0xFF1A2A3A) else Color(0xFF3A3A3A)).copy(alpha = alpha)
+        val divColor = (if (palette.isDark) Color(0xFF1A2A3A) else Color(0xFF3A3A3A)).copy(alpha = 0.22f * alpha)
 
         // Soft, wide ambient shadow (6dp elevation, ~8dp blur spread, 25% light / 40% dark)
         val targetShadowAlpha = (
@@ -179,7 +179,7 @@ private fun DrawScope.drawHalfPips(
     tileAlpha: Float
 ) {
     val minDim = min(halfSize.width, halfSize.height)
-    val radius = (minDim * 0.105f * 1.15f * 0.90f).coerceAtLeast(1.5f)
+    val radius = (minDim * 0.068f).coerceAtLeast(1.3f)
     val padX = halfSize.width * 0.10f
     val padY = halfSize.height * 0.10f
     val innerW = halfSize.width - padX * 2f
@@ -201,7 +201,7 @@ private fun DrawScope.drawHalfPips(
             center = center
         )
         drawArc(
-            color = Color.Black.copy(alpha = 0.12f * tileAlpha),
+            color = Color.Black.copy(alpha = 0.08f * tileAlpha),
             startAngle = 135f,
             sweepAngle = 180f,
             useCenter = false,

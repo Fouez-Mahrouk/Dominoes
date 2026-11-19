@@ -501,24 +501,42 @@ fun GameBoardScreen(
                                 )
                             }
                             .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (!palette.isDark && (isRootHovered || isRootValid)) {
+                                    Color.White.copy(alpha = if (isRootHovered) 0.55f else 0.40f)
+                                } else {
+                                    Color.Transparent
+                                }
+                            )
                             .clickable(enabled = isRootValid && activeTile != null) {
                                 activeTile?.let { onPlayTile(it.id, PlayTarget.ROOT) }
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        val dashColor = if (isRootHovered || isRootValid) palette.accentTeal else palette.textSecondary.copy(alpha = 0.45f)
+                        val dashColor = if (!palette.isDark) {
+                            if (isRootHovered || isRootValid) Color.White.copy(alpha = 0.60f)
+                            else Color.White.copy(alpha = 0.45f)
+                        } else {
+                            if (isRootHovered || isRootValid) palette.accentTeal else palette.textSecondary.copy(alpha = 0.45f)
+                        }
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawRoundRect(
                                 color = dashColor,
                                 style = Stroke(
-                                    width = if (isRootHovered) 3.dp.toPx() else 2.dp.toPx(),
+                                    width = if (!palette.isDark && (isRootHovered || isRootValid)) {
+                                        2.dp.toPx()
+                                    } else if (isRootHovered) {
+                                        3.dp.toPx()
+                                    } else {
+                                        2.dp.toPx()
+                                    },
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
                                 )
                             )
                         }
                         Text(
                             text = if (isHumanTurn) "Play Here" else "${currentPlayer.name} opens",
-                            color = palette.textSecondary,
+                            color = if (!palette.isDark) Color.White.copy(alpha = 0.90f) else palette.textSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -559,8 +577,12 @@ fun GameBoardScreen(
                                             }
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(
-                                                if (isHovered) palette.accentTeal.copy(alpha = 0.30f)
-                                                else palette.accentTeal.copy(alpha = 0.14f)
+                                                if (!palette.isDark) {
+                                                    Color.White.copy(alpha = if (isHovered) 0.55f else 0.40f)
+                                                } else {
+                                                    if (isHovered) palette.accentTeal.copy(alpha = 0.30f)
+                                                    else palette.accentTeal.copy(alpha = 0.14f)
+                                                }
                                             )
                                             .clickable(enabled = activeTile != null) {
                                                 activeTile?.let { onPlayTile(it.id, target) }
@@ -569,16 +591,26 @@ fun GameBoardScreen(
                                     ) {
                                         Canvas(modifier = Modifier.fillMaxSize()) {
                                             drawRoundRect(
-                                                color = palette.accentTeal,
+                                                color = if (!palette.isDark) {
+                                                    Color.White.copy(alpha = 0.60f)
+                                                } else {
+                                                    palette.accentTeal
+                                                },
                                                 style = Stroke(
-                                                    width = if (isHovered) 2.5.dp.toPx() else 1.5.dp.toPx(),
+                                                    width = if (!palette.isDark) {
+                                                        2.dp.toPx()
+                                                    } else if (isHovered) {
+                                                        2.5.dp.toPx()
+                                                    } else {
+                                                        1.5.dp.toPx()
+                                                    },
                                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
                                                 )
                                             )
                                         }
                                         Text(
                                             text = "${dz.end.requiredPip}",
-                                            color = palette.accentTeal,
+                                            color = if (!palette.isDark) Color.White else palette.accentTeal,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -738,25 +770,20 @@ fun GameBoardScreen(
                                 .graphicsLayer { alpha = scoreAlpha.value },
                             contentAlignment = Alignment.Center
                         ) {
+                            val shadowPx = with(density) { 1.dp.toPx() }
                             Text(
                                 text = scoreLabel,
                                 style = TextStyle(
-                                    color = if (palette.isDark) Color(0xFFFFFFFF) else Color(0xFF1A1A1A),
+                                    color = Color(0xFFFFC107),
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    shadow = if (palette.isDark) {
-                                        Shadow(
-                                            color = Color.White.copy(alpha = 0.45f),
-                                            offset = Offset.Zero,
-                                            blurRadius = 12f
-                                        )
-                                    } else {
-                                        Shadow(
-                                            color = Color.Black.copy(alpha = 0.25f),
-                                            offset = Offset(0f, 2f),
-                                            blurRadius = 6f
-                                        )
-                                    }
+                                    shadow = Shadow(
+                                        color = Color(0xFF000000).copy(
+                                            alpha = if (palette.isDark) 0.50f else 0.30f
+                                        ),
+                                        offset = Offset(0f, shadowPx),
+                                        blurRadius = shadowPx
+                                    )
                                 )
                             )
                         }
