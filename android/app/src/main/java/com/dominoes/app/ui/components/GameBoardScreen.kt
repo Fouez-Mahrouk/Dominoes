@@ -35,7 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.SkipForward
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -530,103 +530,20 @@ fun GameBoardScreen(
                 }
 
                 // Scoring glow & sparkle burst banner
-                AnimatedVisibility(
+                ScoreBannerOverlay(
                     visible = activeScoreBanner != null && roundWinCelebration == null,
-                    enter = scaleIn() + fadeIn(),
-                    exit = fadeOut(),
+                    event = activeScoreBanner,
                     modifier = Modifier.align(Alignment.Center)
-                ) {
-                    activeScoreBanner?.let { ev ->
-                        Box(contentAlignment = Alignment.Center) {
-                            SparkleBurstCanvas(color = palette.amberHighlight)
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = palette.accentTeal,
-                                shadowElevation = 10.dp
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "+${ev.points} pts!",
-                                        color = palette.onAccentTeal,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Text(
-                                        text = "${ev.playerName} · ${ev.reason}",
-                                        color = palette.onAccentTeal.copy(alpha = 0.9f),
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                )
 
                 // Celebratory Round-Win Tabletop Overlay across all modes
-                AnimatedVisibility(
+                RoundWinCelebrationOverlay(
                     visible = roundWinCelebration != null,
-                    enter = scaleIn(
-                        initialScale = 0.78f,
-                        animationSpec = spring(
-                            stiffness = Spring.StiffnessMediumLow,
-                            dampingRatio = Spring.DampingRatioMediumBouncy
-                        )
-                    ) + fadeIn(),
-                    exit = scaleOut(targetScale = 0.92f) + fadeOut(),
+                    celebration = roundWinCelebration,
                     modifier = Modifier
                         .align(Alignment.Center)
                         .zIndex(30f)
-                ) {
-                    roundWinCelebration?.let { cel ->
-                        Box(contentAlignment = Alignment.Center) {
-                            SparkleBurstCanvas(color = palette.amberHighlight, radiusDp = 82f)
-                            Surface(
-                                shape = RoundedCornerShape(24.dp),
-                                color = palette.surfaceElevated.copy(alpha = 0.96f),
-                                border = BorderStroke(1.5.dp, palette.amberHighlight),
-                                shadowElevation = 14.dp
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(palette.amberHighlight.copy(alpha = 0.22f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.EmojiEvents,
-                                            contentDescription = null,
-                                            tint = palette.amberHighlight,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    Column {
-                                        Text(
-                                            text = "Round ${cel.roundNumber} Complete",
-                                            color = palette.textSecondary,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Text(
-                                            text = "${cel.winnerName} Wins the Round!",
-                                            color = palette.textPrimary,
-                                            fontSize = 17.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                )
             }
 
             // Human Turn Status / Draw / Pass Controls
@@ -660,7 +577,7 @@ fun GameBoardScreen(
                             )
                         ) {
                             Icon(
-                                imageVector = if (canDraw) Icons.Filled.Layers else Icons.Filled.SkipForward,
+                                imageVector = if (canDraw) Icons.Filled.Layers else Icons.Filled.PlayArrow,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -844,6 +761,117 @@ private fun SparkleBurstCanvas(color: Color, radiusDp: Float = 64f) {
                 radius = 4.dp.toPx() * (1f - progress.value * 0.4f),
                 center = Offset(px, py)
             )
+        }
+    }
+}
+
+@Composable
+private fun ScoreBannerOverlay(
+    visible: Boolean,
+    event: ScoringEvent?,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalDominoPalette.current
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn() + fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        event?.let { ev ->
+            Box(contentAlignment = Alignment.Center) {
+                SparkleBurstCanvas(color = palette.amberHighlight)
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = palette.accentTeal,
+                    shadowElevation = 10.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "+${ev.points} pts!",
+                            color = palette.onAccentTeal,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "${ev.playerName} · ${ev.reason}",
+                            color = palette.onAccentTeal.copy(alpha = 0.9f),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoundWinCelebrationOverlay(
+    visible: Boolean,
+    celebration: RoundWinCelebration?,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalDominoPalette.current
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(
+            initialScale = 0.78f,
+            animationSpec = spring(
+                stiffness = Spring.StiffnessMediumLow,
+                dampingRatio = Spring.DampingRatioMediumBouncy
+            )
+        ) + fadeIn(),
+        exit = scaleOut(targetScale = 0.92f) + fadeOut(),
+        modifier = modifier
+    ) {
+        celebration?.let { cel ->
+            Box(contentAlignment = Alignment.Center) {
+                SparkleBurstCanvas(color = palette.amberHighlight, radiusDp = 82f)
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = palette.surfaceElevated.copy(alpha = 0.96f),
+                    border = BorderStroke(1.5.dp, palette.amberHighlight),
+                    shadowElevation = 14.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(palette.amberHighlight.copy(alpha = 0.22f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.EmojiEvents,
+                                contentDescription = null,
+                                tint = palette.amberHighlight,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Round ${cel.roundNumber} Complete",
+                                color = palette.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${cel.winnerName} Wins the Round!",
+                                color = palette.textPrimary,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

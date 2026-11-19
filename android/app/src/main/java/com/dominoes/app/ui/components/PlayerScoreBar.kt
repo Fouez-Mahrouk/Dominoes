@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +60,7 @@ import com.dominoes.app.engine.computeHandLayout
 import com.dominoes.app.model.GameMode
 import com.dominoes.app.model.Player
 import com.dominoes.app.ui.theme.LocalDominoPalette
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -166,37 +168,13 @@ fun PlayerScoreBar(
                                         WinnerAvatarParticles(color = palette.amberHighlight)
                                     }
 
-                                    AnimatedVisibility(
+                                    RoundWonBadge(
                                         visible = isRoundWinner,
-                                        enter = scaleIn(
-                                            initialScale = 0.55f,
-                                            animationSpec = spring(
-                                                stiffness = Spring.StiffnessMediumLow,
-                                                dampingRatio = Spring.DampingRatioMediumBouncy
-                                            )
-                                        ) + fadeIn(),
-                                        exit = scaleOut(targetScale = 0.85f) + fadeOut(),
                                         modifier = Modifier
                                             .align(Alignment.TopCenter)
                                             .offset(y = (-14).dp)
                                             .zIndex(20f)
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(50),
-                                            color = palette.amberHighlight,
-                                            border = BorderStroke(1.5.dp, palette.background),
-                                            shadowElevation = 4.dp
-                                        ) {
-                                            Text(
-                                                text = "Round Won!",
-                                                color = Color(0xFF0F172A),
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                                            )
-                                        }
-                                    }
+                                    )
                                 }
 
                                 Column(modifier = Modifier.weight(1f)) {
@@ -286,11 +264,48 @@ private fun WinnerAvatarParticles(color: Color) {
 }
 
 @Composable
+private fun RoundWonBadge(
+    visible: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalDominoPalette.current
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(
+            initialScale = 0.55f,
+            animationSpec = spring(
+                stiffness = Spring.StiffnessMediumLow,
+                dampingRatio = Spring.DampingRatioMediumBouncy
+            )
+        ) + fadeIn(),
+        exit = scaleOut(targetScale = 0.85f) + fadeOut(),
+        modifier = modifier
+    ) {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = palette.amberHighlight,
+            border = BorderStroke(1.5.dp, palette.background),
+            shadowElevation = 4.dp
+        ) {
+            Text(
+                text = "Round Won!",
+                color = Color(0xFF0F172A),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun OpponentMiniHand(
     player: Player,
     lastDrawnTileId: String?,
     lastDrawnPlayerId: Int?
 ) {
+    val scope = rememberCoroutineScope()
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -331,8 +346,8 @@ private fun OpponentMiniHand(
                     }
                     LaunchedEffect(isNewDraw) {
                         if (isNewDraw) {
-                            launch { slideY.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
-                            launch { alpha.animateTo(1f, tween(220)) }
+                            scope.launch { slideY.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+                            scope.launch { alpha.animateTo(1f, tween(220)) }
                         }
                     }
                     DominoTileBackCanvas(
