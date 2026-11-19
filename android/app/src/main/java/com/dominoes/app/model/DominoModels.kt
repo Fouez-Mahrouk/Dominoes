@@ -43,6 +43,15 @@ enum class BranchDir(val id: String) {
     }
 }
 
+typealias TileId = String
+
+enum class Direction {
+    LEFT,
+    RIGHT,
+    UP,
+    DOWN
+}
+
 enum class PlayTarget {
     ROOT,
     LEFT,
@@ -109,7 +118,9 @@ data class PlacedTile(
     val isDouble: Boolean,
     val isSpinner: Boolean,
     val playedBy: Int,
-    val sequence: Int
+    val sequence: Int,
+    val attachedTo: TileId? = null,
+    val direction: Direction? = null
 )
 
 data class OpenEnd(

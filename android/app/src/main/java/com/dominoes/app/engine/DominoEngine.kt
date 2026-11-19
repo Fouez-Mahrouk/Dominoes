@@ -3,6 +3,7 @@ package com.dominoes.app.engine
 import com.dominoes.app.model.BoardBranches
 import com.dominoes.app.model.BranchDir
 import com.dominoes.app.model.Difficulty
+import com.dominoes.app.model.Direction
 import com.dominoes.app.model.DominoTile
 import com.dominoes.app.model.GameMode
 import com.dominoes.app.model.GamePhase
@@ -15,6 +16,7 @@ import com.dominoes.app.model.Player
 import com.dominoes.app.model.PlayerRoundBreakdown
 import com.dominoes.app.model.RoundSummary
 import com.dominoes.app.model.ScoringEvent
+import com.dominoes.app.model.TileId
 import com.dominoes.app.model.WinType
 import kotlin.math.floor
 import kotlin.math.max
@@ -470,6 +472,13 @@ object DominoEngine {
         val req = targetEnd.requiredPip
         val innerPip = req
         val outerPip = if (tile.a == req) tile.b else tile.a
+        val attachedTo: TileId = targetEnd.anchorTileId
+        val direction: Direction = when (branchDir) {
+            BranchDir.LEFT -> Direction.LEFT
+            BranchDir.RIGHT -> Direction.RIGHT
+            BranchDir.UP -> Direction.UP
+            BranchDir.DOWN -> Direction.DOWN
+        }
 
         val placed = PlacedTile(
             tile = tile,
@@ -479,7 +488,9 @@ object DominoEngine {
             isDouble = isDouble,
             isSpinner = canBecomeSpinner,
             playedBy = playerId,
-            sequence = sequence
+            sequence = sequence,
+            attachedTo = attachedTo,
+            direction = direction
         )
 
         val newSpinnerLoc = if (canBecomeSpinner && (target == PlayTarget.LEFT || target == PlayTarget.RIGHT)) {
