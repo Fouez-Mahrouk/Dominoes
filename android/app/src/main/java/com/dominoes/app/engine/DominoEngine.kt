@@ -53,7 +53,7 @@ object DominoEngine {
             subtitle = "Open dominoes · Draw & empty hand",
             defaultTarget = 3,
             hasBoneyard = true,
-            hasSpinner = false,
+            hasSpinner = true,
             shortRule = "7 tiles each. Draw from boneyard when stuck. First to empty hand or lowest pips when blocked wins 1 round."
         ),
         GameMode.BLOCK to ModeMeta(
