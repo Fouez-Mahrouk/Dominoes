@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -67,6 +68,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -736,19 +738,27 @@ fun GameBoardScreen(
                                 .graphicsLayer { alpha = scoreAlpha.value },
                             contentAlignment = Alignment.Center
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = palette.accentTeal,
-                                shadowElevation = 8.dp
-                            ) {
-                                Text(
-                                    text = scoreLabel,
-                                    color = palette.onAccentTeal,
-                                    fontSize = 22.sp,
+                            Text(
+                                text = scoreLabel,
+                                style = TextStyle(
+                                    color = if (palette.isDark) Color(0xFFFFFFFF) else Color(0xFF1A1A1A),
+                                    fontSize = 26.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    shadow = if (palette.isDark) {
+                                        Shadow(
+                                            color = Color.White.copy(alpha = 0.45f),
+                                            offset = Offset.Zero,
+                                            blurRadius = 12f
+                                        )
+                                    } else {
+                                        Shadow(
+                                            color = Color.Black.copy(alpha = 0.25f),
+                                            offset = Offset(0f, 2f),
+                                            blurRadius = 6f
+                                        )
+                                    }
                                 )
-                            }
+                            )
                         }
                     }
                 }

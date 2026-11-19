@@ -36,16 +36,6 @@ private fun pipOffsets(value: Int): List<Pair<Float, Float>> = when (value) {
     else -> emptyList()
 }
 
-private fun darkenColor(color: Color, fraction: Float): Color {
-    val factor = (1f - fraction).coerceIn(0f, 1f)
-    return Color(
-        red = color.red * factor,
-        green = color.green * factor,
-        blue = color.blue * factor,
-        alpha = color.alpha
-    )
-}
-
 @Composable
 fun DominoTileCanvas(
     tile: DominoTile,
@@ -71,8 +61,8 @@ fun DominoTileCanvas(
 
         val faceTop = if (palette.isDark) Color(0xFFFFF8E1) else Color(0xFFFFFFFF)
         val faceBottom = if (palette.isDark) Color(0xFFE8D5B7) else Color(0xFFF0EDE6)
-        val edgeColor = darkenColor(faceBottom, 0.15f)
-        val subtleBorderColor = darkenColor(faceBottom, 0.20f)
+        val edgeColor = if (palette.isDark) Color(0xFFC4A87A) else Color(0xFFD5CFC3)
+        val subtleBorderColor = if (palette.isDark) Color(0xFF37474F) else Color(0xFFD5CFC3)
         val pipColor = (if (palette.isDark) Color(0xFF0D1B2A) else Color(0xFF1A1A1A)).copy(alpha = alpha)
         val divColor = (if (palette.isDark) Color(0xFF0D1B2A) else Color(0xFF1A1A1A)).copy(alpha = 0.22f * alpha)
 
@@ -189,7 +179,7 @@ private fun DrawScope.drawHalfPips(
     tileAlpha: Float
 ) {
     val minDim = min(halfSize.width, halfSize.height)
-    val radius = (minDim * 0.105f * 1.15f).coerceAtLeast(1.7f)
+    val radius = (minDim * 0.105f * 1.15f * 0.90f).coerceAtLeast(1.5f)
     val padX = halfSize.width * 0.10f
     val padY = halfSize.height * 0.10f
     val innerW = halfSize.width - padX * 2f
@@ -211,7 +201,7 @@ private fun DrawScope.drawHalfPips(
             center = center
         )
         drawArc(
-            color = Color.Black.copy(alpha = 0.20f * tileAlpha),
+            color = Color.Black.copy(alpha = 0.12f * tileAlpha),
             startAngle = 135f,
             sweepAngle = 180f,
             useCenter = false,
