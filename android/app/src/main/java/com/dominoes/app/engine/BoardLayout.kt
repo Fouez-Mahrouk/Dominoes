@@ -5,6 +5,7 @@ import com.dominoes.app.model.BranchDir
 import com.dominoes.app.model.GameMode
 import com.dominoes.app.model.OpenEnd
 import com.dominoes.app.model.PlacedTile
+import com.dominoes.app.model.PlayTarget
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -104,89 +105,138 @@ object BoardLayout {
         }
     }
 
-    private fun advanceCursor(
-        cursor: CursorState,
-        branch: BranchDir,
-        nextTile: PlacedTile?
-    ): AdvanceResult {
-        val lastTile = cursor.lastTile
-        var heading = cursor.heading
-        val canTurn = !lastTile.placed.isDouble
+    private data class PlacedRect(
+        val minX: Float,
+        val maxX: Float,
+        val minY: Float,
+        val maxY: Float
+    )
 
-        if (canTurn) {
-            when (branch) {
-                BranchDir.RIGHT -> {
-                    if (heading == Heading.E && cursor.x >= 210f) heading = Heading.N
-                    else if (heading == Heading.N && cursor.y <= -165f) heading = Heading.E
-                }
-                BranchDir.LEFT -> {
-                    if (heading == Heading.W && cursor.x <= -210f) heading = Heading.S
-                    else if (heading == Heading.S && cursor.y >= 165f) heading = Heading.W
-                }
-                BranchDir.UP -> {
-                    if (heading == Heading.N && cursor.y <= -155f) heading = Heading.W
-                    else if (heading == Heading.W && cursor.x <= -340f) heading = Heading.N
-                }
-                BranchDir.DOWN -> {
-                    if (heading == Heading.S && cursor.y >= 155f) heading = Heading.E
-                    else if (heading == Heading.E && cursor.x >= 340f) heading = Heading.S
-                }
-            }
+    private fun rectFor(cx: Float, cy: Float, w: Float, h: Float): PlacedRect =
+        PlacedRect(cx - w / 2f, cx + w / 2f, cy - h / 2f, cy + h / 2f)
+
+    private fun overlapsAny(rect: PlacedRect, rects: List<PlacedRect>, margin: Float = 2f): Boolean =
+        rects.any { other ->
+            rect.minX < other.maxX + margin &&
+                rect.maxX + margin > other.minX &&
+                rect.minY < other.maxY + margin &&
+                rect.maxY + margin > other.minY
         }
 
-        val isDouble = nextTile?.isDouble ?: false
-        val dims = tileDimensions(heading, isDouble)
+    private fun turnCCW(heading: Heading): Heading = when (heading) {
+        Heading.E -> Heading.N
+        Heading.N -> Heading.W
+        Heading.W -> Heading.S
+        Heading.S -> Heading.E
+    }
 
-        if (heading != cursor.heading) {
-            val prev = cursor.heading
+    private fun turnCW(heading: Heading): Heading = when (heading) {
+        Heading.E -> Heading.S
+        Heading.S -> Heading.W
+        Heading.W -> Heading.N
+        Heading.N -> Heading.E
+    }
+
+    private fun computeCandidate(
+        lastTile: PositionedTile,
+        prevHeading: Heading,
+        newHeading: Heading,
+        nextTile: PlacedTile?
+    ): AdvanceResult {
+        val isDouble = nextTile?.isDouble ?: false
+        val dims = tileDimensions(newHeading, isDouble)
+
+        if (newHeading != prevHeading) {
             var anchorX = lastTile.x
             var anchorY = lastTile.y
             when {
-                prev == Heading.E && heading == Heading.N -> {
+                prevHeading == Heading.E && newHeading == Heading.N -> {
                     anchorX = lastTile.x + lastTile.width / 2f - TILE_SHORT / 2f
                     anchorY = lastTile.y - lastTile.height / 2f - TILE_GAP - dims.height / 2f
                 }
-                prev == Heading.N && heading == Heading.E -> {
+                prevHeading == Heading.N && newHeading == Heading.E -> {
                     anchorX = lastTile.x + lastTile.width / 2f + TILE_GAP + dims.width / 2f
                     anchorY = lastTile.y - lastTile.height / 2f + TILE_SHORT / 2f
                 }
-                prev == Heading.W && heading == Heading.S -> {
+                prevHeading == Heading.W && newHeading == Heading.S -> {
                     anchorX = lastTile.x - lastTile.width / 2f + TILE_SHORT / 2f
                     anchorY = lastTile.y + lastTile.height / 2f + TILE_GAP + dims.height / 2f
                 }
-                prev == Heading.S && heading == Heading.W -> {
+                prevHeading == Heading.S && newHeading == Heading.W -> {
                     anchorX = lastTile.x - lastTile.width / 2f - TILE_GAP - dims.width / 2f
                     anchorY = lastTile.y + lastTile.height / 2f - TILE_SHORT / 2f
                 }
-                prev == Heading.N && heading == Heading.W -> {
+                prevHeading == Heading.N && newHeading == Heading.W -> {
                     anchorX = lastTile.x - lastTile.width / 2f - TILE_GAP - dims.width / 2f
                     anchorY = lastTile.y - lastTile.height / 2f + TILE_SHORT / 2f
                 }
-                prev == Heading.W && heading == Heading.N -> {
+                prevHeading == Heading.W && newHeading == Heading.N -> {
                     anchorX = lastTile.x - lastTile.width / 2f + TILE_SHORT / 2f
                     anchorY = lastTile.y - lastTile.height / 2f - TILE_GAP - dims.height / 2f
                 }
-                prev == Heading.S && heading == Heading.E -> {
+                prevHeading == Heading.S && newHeading == Heading.E -> {
                     anchorX = lastTile.x + lastTile.width / 2f + TILE_GAP + dims.width / 2f
                     anchorY = lastTile.y + lastTile.height / 2f - TILE_SHORT / 2f
                 }
-                prev == Heading.E && heading == Heading.S -> {
+                prevHeading == Heading.E && newHeading == Heading.S -> {
                     anchorX = lastTile.x + lastTile.width / 2f - TILE_SHORT / 2f
                     anchorY = lastTile.y + lastTile.height / 2f + TILE_GAP + dims.height / 2f
                 }
             }
-            return AdvanceResult(anchorX, anchorY, heading)
+            return AdvanceResult(anchorX, anchorY, newHeading)
         }
 
         var cx = lastTile.x
         var cy = lastTile.y
-        when (heading) {
+        when (newHeading) {
             Heading.E -> cx = lastTile.x + lastTile.width / 2f + TILE_GAP + dims.width / 2f
             Heading.W -> cx = lastTile.x - lastTile.width / 2f - TILE_GAP - dims.width / 2f
             Heading.N -> cy = lastTile.y - lastTile.height / 2f - TILE_GAP - dims.height / 2f
             Heading.S -> cy = lastTile.y + lastTile.height / 2f + TILE_GAP + dims.height / 2f
         }
-        return AdvanceResult(cx, cy, heading)
+        return AdvanceResult(cx, cy, newHeading)
+    }
+
+    private fun advanceCompact(
+        cursor: CursorState,
+        nextTile: PlacedTile?,
+        occupiedRects: List<PlacedRect>,
+        centerX: Float,
+        centerY: Float
+    ): AdvanceResult {
+        val lastTile = cursor.lastTile
+        val curHeading = cursor.heading
+        val isDouble = nextTile?.isDouble ?: false
+        val straight = computeCandidate(lastTile, curHeading, curHeading, nextTile)
+
+        val candidates = mutableListOf<Pair<AdvanceResult, Float>>()
+        candidates.add(straight to 4f)
+
+        if (!lastTile.placed.isDouble && !isDouble) {
+            val ccw = computeCandidate(lastTile, curHeading, turnCCW(curHeading), nextTile)
+            val cw = computeCandidate(lastTile, curHeading, turnCW(curHeading), nextTile)
+            candidates.add(ccw to 0f)
+            candidates.add(cw to 8f)
+        }
+
+        val valid = candidates.filter { (cand, _) ->
+            val dims = tileDimensions(cand.heading, isDouble)
+            !overlapsAny(rectFor(cand.cx, cand.cy, dims.width, dims.height), occupiedRects)
+        }
+
+        if (valid.isEmpty()) return straight
+        if (valid.size == 1) return valid.first().first
+
+        val curDist = kotlin.math.hypot((lastTile.x - centerX).toDouble(), (lastTile.y - centerY).toDouble()).toFloat()
+        val straightValid = valid.find { it.first == straight }?.first
+        if (curDist < 145f && straightValid != null) {
+            return straightValid
+        }
+
+        return valid.minBy { (cand, bias) ->
+            val d = kotlin.math.hypot((cand.cx - centerX).toDouble(), (cand.cy - centerY).toDouble()).toFloat()
+            d + bias
+        }.first
     }
 
     fun compute(board: BoardBranches, mode: GameMode): BoardLayoutResult {
@@ -200,6 +250,7 @@ object BoardLayout {
         val positioned = mutableListOf<PositionedTile>()
         val dropZones = mutableListOf<PositionedDropZone>()
         val posById = mutableMapOf<String, PositionedTile>()
+        val occupiedRects = mutableListOf<PlacedRect>()
 
         val rootDims = tileDimensions(Heading.E, root.isDouble)
         val rootPips = getPipsForHeading(root, Heading.E, rootDims.orientation)
@@ -215,14 +266,37 @@ object BoardLayout {
         )
         positioned.add(rootPos)
         posById[root.tile.id] = rootPos
+        occupiedRects.add(rectFor(rootPos.x, rootPos.y, rootPos.width, rootPos.height))
 
         val armCursors = mutableMapOf<BranchDir, CursorState>()
+        val modeHasSpinner = DominoEngine.metaFor(mode).hasSpinner
 
-        listOf(BranchDir.RIGHT to board.right, BranchDir.LEFT to board.left).forEach { (branch, list) ->
-            val initialHeading = if (branch == BranchDir.RIGHT) Heading.E else Heading.W
-            var cursor = CursorState(rootPos.x, rootPos.y, initialHeading, rootPos)
-            for (placed in list) {
-                val adv = advanceCursor(cursor, branch, placed)
+        // Reserve open root/spinner entry doorways so longer arms wrap around them without blocking shorter or open arms
+        val stubRects = mutableMapOf<BranchDir, PlacedRect>()
+        stubRects[BranchDir.LEFT] = rectFor(-(rootPos.width / 2f + TILE_GAP + TILE_LONG / 2f), 0f, TILE_LONG, TILE_SHORT)
+        stubRects[BranchDir.RIGHT] = rectFor(rootPos.width / 2f + TILE_GAP + TILE_LONG / 2f, 0f, TILE_LONG, TILE_SHORT)
+        if (modeHasSpinner && board.spinnerLocation == PlayTarget.ROOT) {
+            stubRects[BranchDir.UP] = rectFor(0f, -(rootPos.height / 2f + TILE_GAP + TILE_LONG / 2f), TILE_SHORT, TILE_LONG)
+            stubRects[BranchDir.DOWN] = rectFor(0f, rootPos.height / 2f + TILE_GAP + TILE_LONG / 2f, TILE_SHORT, TILE_LONG)
+        }
+
+        fun layoutArm(
+            branch: BranchDir,
+            tiles: List<PlacedTile>,
+            startTile: PositionedTile,
+            initialHeading: Heading,
+            centerX: Float,
+            centerY: Float
+        ) {
+            var cursor = CursorState(startTile.x, startTile.y, initialHeading, startTile)
+            for (placed in tiles) {
+                val activeBlockers = buildList {
+                    addAll(occupiedRects)
+                    stubRects.forEach { (b, r) ->
+                        if (b != branch) add(r)
+                    }
+                }
+                val adv = advanceCompact(cursor, placed, activeBlockers, centerX, centerY)
                 val dims = tileDimensions(adv.heading, placed.isDouble)
                 val pips = getPipsForHeading(placed, adv.heading, dims.orientation)
                 val pos = PositionedTile(
@@ -237,42 +311,54 @@ object BoardLayout {
                 )
                 positioned.add(pos)
                 posById[placed.tile.id] = pos
+                occupiedRects.add(rectFor(pos.x, pos.y, pos.width, pos.height))
                 cursor = CursorState(adv.cx, adv.cy, adv.heading, pos)
             }
             armCursors[branch] = cursor
+        }
+
+        // Lay out shorter left/right arm first to keep the shorter end closest to center
+        val horizArms = listOf(BranchDir.LEFT to board.left, BranchDir.RIGHT to board.right)
+            .sortedBy { it.second.size }
+        for ((branch, list) in horizArms) {
+            val initialHeading = if (branch == BranchDir.RIGHT) Heading.E else Heading.W
+            layoutArm(branch, list, rootPos, initialHeading, 0f, 0f)
         }
 
         val spinnerPlaced = DominoEngine.findSpinnerTile(board)
         val spinnerPos = spinnerPlaced?.let { posById[it.tile.id] } ?: rootPos
 
-        listOf(BranchDir.UP to board.up, BranchDir.DOWN to board.down).forEach { (branch, list) ->
-            val initialHeading = if (branch == BranchDir.UP) Heading.N else Heading.S
-            var cursor = CursorState(spinnerPos.x, spinnerPos.y, initialHeading, spinnerPos)
-            for (placed in list) {
-                val adv = advanceCursor(cursor, branch, placed)
-                val dims = tileDimensions(adv.heading, placed.isDouble)
-                val pips = getPipsForHeading(placed, adv.heading, dims.orientation)
-                val pos = PositionedTile(
-                    placed = placed,
-                    x = adv.cx,
-                    y = adv.cy,
-                    width = dims.width,
-                    height = dims.height,
-                    orientation = dims.orientation,
-                    firstPip = pips.first,
-                    secondPip = pips.second
-                )
-                positioned.add(pos)
-                posById[placed.tile.id] = pos
-                cursor = CursorState(adv.cx, adv.cy, adv.heading, pos)
-            }
-            armCursors[branch] = cursor
+        if (modeHasSpinner && spinnerPlaced != null) {
+            stubRects[BranchDir.UP] = rectFor(
+                spinnerPos.x,
+                spinnerPos.y - (spinnerPos.height / 2f + TILE_GAP + TILE_LONG / 2f),
+                TILE_SHORT,
+                TILE_LONG
+            )
+            stubRects[BranchDir.DOWN] = rectFor(
+                spinnerPos.x,
+                spinnerPos.y + (spinnerPos.height / 2f + TILE_GAP + TILE_LONG / 2f),
+                TILE_SHORT,
+                TILE_LONG
+            )
         }
+
+        // Lay out shorter spinner vertical arm first
+        val vertArms = listOf(BranchDir.UP to board.up, BranchDir.DOWN to board.down)
+            .sortedBy { it.second.size }
+        for ((branch, list) in vertArms) {
+            val initialHeading = if (branch == BranchDir.UP) Heading.N else Heading.S
+            layoutArm(branch, list, spinnerPos, initialHeading, spinnerPos.x, spinnerPos.y)
+        }
+
+        val hasSpinner = spinnerPlaced != null && posById.containsKey(spinnerPlaced.tile.id)
+        val anchorX = if (hasSpinner) spinnerPos.x else 0f
+        val anchorY = if (hasSpinner) spinnerPos.y else 0f
 
         val openEnds = DominoEngine.getOpenEnds(board, mode)
         for (end in openEnds) {
             val cursor = armCursors[end.branch] ?: continue
-            val adv = advanceCursor(cursor, end.branch, null)
+            val adv = advanceCompact(cursor, null, occupiedRects, anchorX, anchorY)
             val dims = tileDimensions(adv.heading, false)
             dropZones.add(
                 PositionedDropZone(
@@ -284,13 +370,10 @@ object BoardLayout {
                     heading = adv.heading
                 )
             )
+            occupiedRects.add(rectFor(adv.cx, adv.cy, dims.width, dims.height))
         }
 
         // Pin active spinner at (0, 0) so it never drifts off-center
-        val hasSpinner = spinnerPlaced != null && posById.containsKey(spinnerPlaced.tile.id)
-        val anchorX = if (hasSpinner) spinnerPos.x else 0f
-        val anchorY = if (hasSpinner) spinnerPos.y else 0f
-
         if (anchorX != 0f || anchorY != 0f) {
             positioned.forEach {
                 it.x -= anchorX

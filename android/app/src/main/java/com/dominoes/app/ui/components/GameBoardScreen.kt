@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -72,11 +73,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.dominoes.app.engine.BoardLayout
 import com.dominoes.app.engine.DominoEngine
+import com.dominoes.app.engine.Heading
 import com.dominoes.app.engine.TileOrientation
 import com.dominoes.app.engine.computeHandLayout
+import com.dominoes.app.model.BoardBranches
+import com.dominoes.app.model.BranchDir
 import com.dominoes.app.model.DominoTile
+import com.dominoes.app.model.GameMode
 import com.dominoes.app.model.GamePhase
 import com.dominoes.app.model.MatchState
+import com.dominoes.app.model.OpenEnd
+import com.dominoes.app.model.PlacedTile
 import com.dominoes.app.model.PlayTarget
 import com.dominoes.app.model.RoundWinCelebration
 import com.dominoes.app.ui.theme.LocalDominoPalette
@@ -208,6 +215,11 @@ fun GameBoardScreen(
         return best
     }
 
+    val selectedHandTile = remember(selectedTileId, isHumanTurn, currentPlayer.hand) {
+        if (!isHumanTurn || selectedTileId == null) null
+        else currentPlayer.hand.find { it.id == selectedTileId }
+    }
+
     fun handleHandTileTap(tile: DominoTile) {
         if (!isHumanTurn || !playableTileIds.contains(tile.id)) return
         onSelectTileHaptic()
@@ -226,6 +238,20 @@ fun GameBoardScreen(
             }
         } else {
             selectedTileId = tile.id
+            val validTargets = matchingEnds.map { PlayTarget.fromBranch(it.branch) }.toSet()
+            val nearestDz = layout.dropZones
+                .filter { validTargets.contains(PlayTarget.fromBranch(it.end.branch)) }
+                .minByOrNull { dz ->
+                    val dx = with(density) { dz.x.dp.toPx() } + cameraX.value
+                    val dy = with(density) { dz.y.dp.toPx() } + cameraY.value
+                    hypot(dx, dy)
+                }
+            if (nearestDz != null) {
+                val targetX = -with(density) { nearestDz.x.dp.toPx() }
+                val targetY = -with(density) { nearestDz.y.dp.toPx() }
+                scope.launch { cameraX.animateTo(targetX, tween(300, easing = FastOutSlowInEasing)) }
+                scope.launch { cameraY.animateTo(targetY, tween(300, easing = FastOutSlowInEasing)) }
+            }
         }
     }
 
@@ -414,53 +440,111 @@ fun GameBoardScreen(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        // Drop zones on valid endpoints
+                        // Drop zones on valid endpoints + open-end score hint badges (scoring modes only)
                         layout.dropZones.forEach { dz ->
-                            val target = PlayTarget.fromBranch(dz.end.branch)
-                            val isValid = validTargetsForActiveTile.contains(target)
-                            val isHovered = hoveredTarget == target
-                            if (isValid || isHovered) {
-                                val dxDp = dz.x.dp
-                                val dyDp = dz.y.dp
-                                val wDp = dz.width.dp
-                                val hDp = dz.height.dp
+                            key(dz.end.branch) {
+                                val target = PlayTarget.fromBranch(dz.end.branch)
+                                val isValid = validTargetsForActiveTile.contains(target)
+                                val isHovered = hoveredTarget == target
+                                if (isValid || isHovered) {
+                                    val dxDp = dz.x.dp
+                                    val dyDp = dz.y.dp
+                                    val wDp = dz.width.dp
+                                    val hDp = dz.height.dp
 
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = dxDp, y = dyDp)
-                                        .size(wDp, hDp)
-                                        .onGloballyPositioned { coords ->
-                                            val pos = coords.positionInRoot()
-                                            dropZoneCenters[target] = Offset(
-                                                pos.x + coords.size.width / 2f,
-                                                pos.y + coords.size.height / 2f
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(x = dxDp, y = dyDp)
+                                            .size(wDp, hDp)
+                                            .onGloballyPositioned { coords ->
+                                                val pos = coords.positionInRoot()
+                                                dropZoneCenters[target] = Offset(
+                                                    pos.x + coords.size.width / 2f,
+                                                    pos.y + coords.size.height / 2f
+                                                )
+                                            }
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(
+                                                if (isHovered) palette.accentTeal.copy(alpha = 0.30f)
+                                                else palette.accentTeal.copy(alpha = 0.14f)
+                                            )
+                                            .clickable(enabled = activeTile != null) {
+                                                activeTile?.let { onPlayTile(it.id, target) }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Canvas(modifier = Modifier.fillMaxSize()) {
+                                            drawRoundRect(
+                                                color = palette.accentTeal,
+                                                style = Stroke(
+                                                    width = if (isHovered) 2.5.dp.toPx() else 1.5.dp.toPx(),
+                                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                                                )
                                             )
                                         }
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (isHovered) palette.accentTeal.copy(alpha = 0.30f)
-                                            else palette.accentTeal.copy(alpha = 0.14f)
-                                        )
-                                        .clickable(enabled = activeTile != null) {
-                                            activeTile?.let { onPlayTile(it.id, target) }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Canvas(modifier = Modifier.fillMaxSize()) {
-                                        drawRoundRect(
+                                        Text(
+                                            text = "${dz.end.requiredPip}",
                                             color = palette.accentTeal,
-                                            style = Stroke(
-                                                width = if (isHovered) 2.5.dp.toPx() else 1.5.dp.toPx(),
-                                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
-                                            )
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
-                                    Text(
-                                        text = "${dz.end.requiredPip}",
-                                        color = palette.accentTeal,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                }
+
+                                val hintScore = remember(selectedHandTile, match.board, match.mode, dz.end) {
+                                    if (roundBased ||
+                                        selectedHandTile == null ||
+                                        !DominoEngine.tileCanMatchEnd(selectedHandTile, dz.end)
+                                    ) {
+                                        0
+                                    } else {
+                                        previewPlayScore(match.board, match.mode, selectedHandTile, dz.end)
+                                    }
+                                }
+                                var cachedHintScore by remember { mutableStateOf(0) }
+                                if (hintScore > 0) {
+                                    cachedHintScore = hintScore
+                                }
+
+                                val badgeOffsetX = when (dz.heading) {
+                                    Heading.E -> (dz.width / 2f + 16f).dp
+                                    Heading.W -> -(dz.width / 2f + 16f).dp
+                                    else -> 0.dp
+                                }
+                                val badgeOffsetY = when (dz.heading) {
+                                    Heading.S -> (dz.height / 2f + 14f).dp
+                                    Heading.N -> -(dz.height / 2f + 14f).dp
+                                    else -> 0.dp
+                                }
+
+                                AnimatedVisibility(
+                                    visible = hintScore > 0,
+                                    enter = fadeIn(tween(durationMillis = 150)),
+                                    exit = fadeOut(tween(durationMillis = 150)),
+                                    modifier = Modifier
+                                        .offset(x = dz.x.dp + badgeOffsetX, y = dz.y.dp + badgeOffsetY)
+                                        .zIndex(15f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(22.dp)
+                                            .wrapContentWidth()
+                                            .clip(RoundedCornerShape(50))
+                                            .background(
+                                                if (palette.isDark) Color.White.copy(alpha = 0.70f)
+                                                else Color.Black.copy(alpha = 0.70f)
+                                            )
+                                            .padding(horizontal = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$cachedHintScore",
+                                            color = if (palette.isDark) Color.Black else Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -900,4 +984,56 @@ private fun RoundWinCelebrationOverlay(
             }
         }
     }
+}
+
+private fun previewPlayScore(
+    board: BoardBranches,
+    mode: GameMode,
+    tile: DominoTile,
+    end: OpenEnd
+): Int {
+    val isDouble = tile.a == tile.b
+    val canBecomeSpinner = DominoEngine.metaFor(mode).hasSpinner && isDouble && board.spinnerTileId == null
+    val req = end.requiredPip
+    val outerPip = if (tile.a == req) tile.b else tile.a
+    val target = PlayTarget.fromBranch(end.branch)
+    val placed = PlacedTile(
+        tile = tile,
+        target = target,
+        innerPip = req,
+        outerPip = outerPip,
+        isDouble = isDouble,
+        isSpinner = canBecomeSpinner,
+        playedBy = 0,
+        sequence = 0
+    )
+    val newSpinnerLoc = if (canBecomeSpinner && (target == PlayTarget.LEFT || target == PlayTarget.RIGHT)) {
+        target
+    } else {
+        board.spinnerLocation
+    }
+    val simBoard = when (end.branch) {
+        BranchDir.LEFT -> board.copy(
+            left = board.left + placed,
+            spinnerTileId = if (canBecomeSpinner) tile.id else board.spinnerTileId,
+            spinnerLocation = newSpinnerLoc
+        )
+        BranchDir.RIGHT -> board.copy(
+            right = board.right + placed,
+            spinnerTileId = if (canBecomeSpinner) tile.id else board.spinnerTileId,
+            spinnerLocation = newSpinnerLoc
+        )
+        BranchDir.UP -> board.copy(
+            up = board.up + placed,
+            spinnerTileId = if (canBecomeSpinner) tile.id else board.spinnerTileId,
+            spinnerLocation = newSpinnerLoc
+        )
+        BranchDir.DOWN -> board.copy(
+            down = board.down + placed,
+            spinnerTileId = if (canBecomeSpinner) tile.id else board.spinnerTileId,
+            spinnerLocation = newSpinnerLoc
+        )
+    }
+    val openSum = DominoEngine.getOpenEndsSum(simBoard, mode)
+    return DominoEngine.calculatePlayScore(openSum, mode).points
 }
