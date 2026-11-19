@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -128,12 +129,21 @@ fun GameBoardScreen(
     val scope = rememberCoroutineScope()
     val cameraX = remember { Animatable(0f) }
     val cameraY = remember { Animatable(0f) }
+    val selectionScale = remember { Animatable(1f) }
+    var boardViewportWidthPx by remember { mutableStateOf(0f) }
+    var boardViewportHeightPx by remember { mutableStateOf(0f) }
     val dropZoneCenters = remember { mutableStateMapOf<PlayTarget, Offset>() }
 
     LaunchedEffect(match.currentPlayerIndex, match.moveSequence, match.roundNumber) {
         selectedTileId = null
         draggingTile = null
         hoveredTarget = null
+    }
+
+    LaunchedEffect(selectedTileId) {
+        if (selectedTileId == null && selectionScale.value != 1f) {
+            selectionScale.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+        }
     }
 
     LaunchedEffect(match.lastScoringEvent?.id) {
@@ -239,13 +249,60 @@ fun GameBoardScreen(
         } else {
             selectedTileId = tile.id
             val validTargets = matchingEnds.map { PlayTarget.fromBranch(it.branch) }.toSet()
-            val nearestDz = layout.dropZones
+            val validDropZones = layout.dropZones
                 .filter { validTargets.contains(PlayTarget.fromBranch(it.end.branch)) }
-                .minByOrNull { dz ->
-                    val dx = with(density) { dz.x.dp.toPx() } + cameraX.value
-                    val dy = with(density) { dz.y.dp.toPx() } + cameraY.value
-                    hypot(dx, dy)
+
+            if (!roundBased) {
+                val scoringDropZones = validDropZones.filter { dz ->
+                    previewPlayScore(match.board, match.mode, tile, dz.end) > 0
                 }
+                if (scoringDropZones.isNotEmpty()) {
+                    val minX = with(density) { scoringDropZones.minOf { it.x - it.width / 2f - 24f }.dp.toPx() }
+                    val maxX = with(density) { scoringDropZones.maxOf { it.x + it.width / 2f + 24f }.dp.toPx() }
+                    val minY = with(density) { scoringDropZones.minOf { it.y - it.height / 2f - 24f }.dp.toPx() }
+                    val maxY = with(density) { scoringDropZones.maxOf { it.y + it.height / 2f + 24f }.dp.toPx() }
+                    val bboxWidth = (maxX - minX).coerceAtLeast(1f)
+                    val bboxHeight = (maxY - minY).coerceAtLeast(1f)
+
+                    val exceedsViewport = boardViewportWidthPx > 0f &&
+                        boardViewportHeightPx > 0f &&
+                        (bboxWidth > boardViewportWidthPx || bboxHeight > boardViewportHeightPx)
+
+                    val targetScale = if (exceedsViewport) {
+                        (minOf(boardViewportWidthPx / bboxWidth, boardViewportHeightPx / bboxHeight) * 0.9f)
+                            .coerceIn(0.5f, 1.0f)
+                    } else {
+                        1.0f
+                    }
+
+                    val midXPx = if (exceedsViewport) {
+                        (minX + maxX) / 2f
+                    } else {
+                        scoringDropZones.map { with(density) { it.x.dp.toPx() } }.average().toFloat()
+                    }
+                    val midYPx = if (exceedsViewport) {
+                        (minY + maxY) / 2f
+                    } else {
+                        scoringDropZones.map { with(density) { it.y.dp.toPx() } }.average().toFloat()
+                    }
+
+                    val targetX = -midXPx * targetScale
+                    val targetY = -midYPx * targetScale
+                    scope.launch { selectionScale.animateTo(targetScale, tween(300, easing = FastOutSlowInEasing)) }
+                    scope.launch { cameraX.animateTo(targetX, tween(300, easing = FastOutSlowInEasing)) }
+                    scope.launch { cameraY.animateTo(targetY, tween(300, easing = FastOutSlowInEasing)) }
+                    return
+                }
+            }
+
+            if (selectionScale.value != 1f) {
+                scope.launch { selectionScale.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) }
+            }
+            val nearestDz = validDropZones.minByOrNull { dz ->
+                val dx = with(density) { dz.x.dp.toPx() } + cameraX.value
+                val dy = with(density) { dz.y.dp.toPx() } + cameraY.value
+                hypot(dx, dy)
+            }
             if (nearestDz != null) {
                 val targetX = -with(density) { nearestDz.x.dp.toPx() }
                 val targetY = -with(density) { nearestDz.y.dp.toPx() }
@@ -372,13 +429,17 @@ fun GameBoardScreen(
                 roundWinnerId = roundWinCelebration?.winnerId
             )
 
-            // Center Board Tabletop (Pan-only, scale fixed at 1.0f)
+            // Center Board Tabletop (Pan-only + temporary selection scale when scoring ends exceed viewport)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .clip(RoundedCornerShape(24.dp))
                     .background(palette.boardWell)
+                    .onSizeChanged { size ->
+                        boardViewportWidthPx = size.width.toFloat()
+                        boardViewportHeightPx = size.height.toFloat()
+                    }
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
@@ -398,10 +459,8 @@ fun GameBoardScreen(
                             .align(Alignment.Center)
                             .size(110.dp, 58.dp)
                             .onGloballyPositioned { coords ->
-                                val pos = coords.positionInRoot()
-                                dropZoneCenters[PlayTarget.ROOT] = Offset(
-                                    pos.x + coords.size.width / 2f,
-                                    pos.y + coords.size.height / 2f
+                                dropZoneCenters[PlayTarget.ROOT] = coords.localToRoot(
+                                    Offset(coords.size.width / 2f, coords.size.height / 2f)
                                 )
                             }
                             .clip(RoundedCornerShape(14.dp))
@@ -428,13 +487,13 @@ fun GameBoardScreen(
                         )
                     }
                 } else {
-                    // Panned board container centered at Box center (scale hardcoded to 1f)
+                    // Panned board container centered at Box center (selectionScale = 1f unless zoomed out to fit all scoring ends)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                scaleX = 1f
-                                scaleY = 1f
+                                scaleX = selectionScale.value
+                                scaleY = selectionScale.value
                                 translationX = cameraX.value
                                 translationY = cameraY.value
                             },
@@ -457,10 +516,8 @@ fun GameBoardScreen(
                                             .offset(x = dxDp, y = dyDp)
                                             .size(wDp, hDp)
                                             .onGloballyPositioned { coords ->
-                                                val pos = coords.positionInRoot()
-                                                dropZoneCenters[target] = Offset(
-                                                    pos.x + coords.size.width / 2f,
-                                                    pos.y + coords.size.height / 2f
+                                                dropZoneCenters[target] = coords.localToRoot(
+                                                    Offset(coords.size.width / 2f, coords.size.height / 2f)
                                                 )
                                             }
                                             .clip(RoundedCornerShape(10.dp))

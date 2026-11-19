@@ -115,7 +115,7 @@ object BoardLayout {
     private fun rectFor(cx: Float, cy: Float, w: Float, h: Float): PlacedRect =
         PlacedRect(cx - w / 2f, cx + w / 2f, cy - h / 2f, cy + h / 2f)
 
-    private fun overlapsAny(rect: PlacedRect, rects: List<PlacedRect>, margin: Float = 2f): Boolean =
+    private fun overlapsAny(rect: PlacedRect, rects: List<PlacedRect>, margin: Float = 4f): Boolean =
         rects.any { other ->
             rect.minX < other.maxX + margin &&
                 rect.maxX + margin > other.minX &&
@@ -197,17 +197,47 @@ object BoardLayout {
         return AdvanceResult(cx, cy, newHeading)
     }
 
+    private fun advanceUntilClear(
+        origin: AdvanceResult,
+        heading: Heading,
+        dims: TileDims,
+        blockers: List<PlacedRect>,
+        maxSteps: Int = 20
+    ): Pair<AdvanceResult, Boolean> {
+        val stepDist = (if (heading == Heading.E || heading == Heading.W) dims.width else dims.height) + 4f
+        val (dx, dy) = when (heading) {
+            Heading.E -> stepDist to 0f
+            Heading.W -> -stepDist to 0f
+            Heading.N -> 0f to -stepDist
+            Heading.S -> 0f to stepDist
+        }
+        var probeX = origin.cx
+        var probeY = origin.cy
+        for (step in 1..maxSteps) {
+            probeX += dx
+            probeY += dy
+            if (!overlapsAny(rectFor(probeX, probeY, dims.width, dims.height), blockers, margin = 4f)) {
+                return AdvanceResult(probeX, probeY, heading) to true
+            }
+        }
+        return AdvanceResult(probeX, probeY, heading) to false
+    }
+
     private fun advanceCompact(
         cursor: CursorState,
         nextTile: PlacedTile?,
-        occupiedRects: List<PlacedRect>,
+        occupiedEntries: List<Pair<String, PlacedRect>>,
         centerX: Float,
-        centerY: Float
+        centerY: Float,
+        spinnerFallback: PositionedTile? = null
     ): AdvanceResult {
         val lastTile = cursor.lastTile
         val curHeading = cursor.heading
         val isDouble = nextTile?.isDouble ?: false
         val straight = computeCandidate(lastTile, curHeading, curHeading, nextTile)
+        val blockers = occupiedEntries
+            .filter { it.first != lastTile.placed.tile.id }
+            .map { it.second }
 
         val candidates = mutableListOf<Pair<AdvanceResult, Float>>()
         candidates.add(straight to 4f)
@@ -221,22 +251,45 @@ object BoardLayout {
 
         val valid = candidates.filter { (cand, _) ->
             val dims = tileDimensions(cand.heading, isDouble)
-            !overlapsAny(rectFor(cand.cx, cand.cy, dims.width, dims.height), occupiedRects)
+            !overlapsAny(rectFor(cand.cx, cand.cy, dims.width, dims.height), blockers, margin = 4f)
         }
 
-        if (valid.isEmpty()) return straight
         if (valid.size == 1) return valid.first().first
-
-        val curDist = kotlin.math.hypot((lastTile.x - centerX).toDouble(), (lastTile.y - centerY).toDouble()).toFloat()
-        val straightValid = valid.find { it.first == straight }?.first
-        if (curDist < 145f && straightValid != null) {
-            return straightValid
+        if (valid.isNotEmpty()) {
+            val curDist = kotlin.math.hypot((lastTile.x - centerX).toDouble(), (lastTile.y - centerY).toDouble()).toFloat()
+            val straightValid = valid.find { it.first == straight }?.first
+            if (curDist < 145f && straightValid != null) {
+                return straightValid
+            }
+            return valid.minBy { (cand, bias) ->
+                val d = kotlin.math.hypot((cand.cx - centerX).toDouble(), (cand.cy - centerY).toDouble()).toFloat()
+                d + bias
+            }.first
         }
 
-        return valid.minBy { (cand, bias) ->
-            val d = kotlin.math.hypot((cand.cx - centerX).toDouble(), (cand.cy - centerY).toDouble()).toFloat()
-            d + bias
-        }.first
+        // All immediate candidates overlapped — advance along this arm (up to 20 steps) until clear
+        val straightDims = tileDimensions(curHeading, isDouble)
+        val (advancedResult, cleared) = advanceUntilClear(straight, curHeading, straightDims, blockers, maxSteps = 20)
+        if (cleared) return advancedResult
+
+        // Fallback to the next available arm of the spinner if the entire arm remained blocked
+        if (spinnerFallback != null) {
+            val fallbackBlockers = occupiedEntries
+                .filter { it.first != spinnerFallback.placed.tile.id }
+                .map { it.second }
+            for (altHeading in listOf(Heading.N, Heading.S, Heading.E, Heading.W)) {
+                if (altHeading == curHeading) continue
+                val altOrigin = computeCandidate(spinnerFallback, altHeading, altHeading, nextTile)
+                val altDims = tileDimensions(altHeading, isDouble)
+                if (!overlapsAny(rectFor(altOrigin.cx, altOrigin.cy, altDims.width, altDims.height), fallbackBlockers, margin = 4f)) {
+                    return altOrigin
+                }
+                val (altAdvanced, altCleared) = advanceUntilClear(altOrigin, altHeading, altDims, fallbackBlockers, maxSteps = 20)
+                if (altCleared) return altAdvanced
+            }
+        }
+
+        return advancedResult
     }
 
     fun compute(board: BoardBranches, mode: GameMode): BoardLayoutResult {
@@ -250,7 +303,7 @@ object BoardLayout {
         val positioned = mutableListOf<PositionedTile>()
         val dropZones = mutableListOf<PositionedDropZone>()
         val posById = mutableMapOf<String, PositionedTile>()
-        val occupiedRects = mutableListOf<PlacedRect>()
+        val occupiedEntries = mutableListOf<Pair<String, PlacedRect>>()
 
         val rootDims = tileDimensions(Heading.E, root.isDouble)
         val rootPips = getPipsForHeading(root, Heading.E, rootDims.orientation)
@@ -266,7 +319,7 @@ object BoardLayout {
         )
         positioned.add(rootPos)
         posById[root.tile.id] = rootPos
-        occupiedRects.add(rectFor(rootPos.x, rootPos.y, rootPos.width, rootPos.height))
+        occupiedEntries.add(root.tile.id to rectFor(rootPos.x, rootPos.y, rootPos.width, rootPos.height))
 
         val armCursors = mutableMapOf<BranchDir, CursorState>()
         val modeHasSpinner = DominoEngine.metaFor(mode).hasSpinner
@@ -286,17 +339,18 @@ object BoardLayout {
             startTile: PositionedTile,
             initialHeading: Heading,
             centerX: Float,
-            centerY: Float
+            centerY: Float,
+            spinnerFallback: PositionedTile? = null
         ) {
             var cursor = CursorState(startTile.x, startTile.y, initialHeading, startTile)
             for (placed in tiles) {
                 val activeBlockers = buildList {
-                    addAll(occupiedRects)
+                    addAll(occupiedEntries)
                     stubRects.forEach { (b, r) ->
-                        if (b != branch) add(r)
+                        if (b != branch) add("stub_${b.name}" to r)
                     }
                 }
-                val adv = advanceCompact(cursor, placed, activeBlockers, centerX, centerY)
+                val adv = advanceCompact(cursor, placed, activeBlockers, centerX, centerY, spinnerFallback)
                 val dims = tileDimensions(adv.heading, placed.isDouble)
                 val pips = getPipsForHeading(placed, adv.heading, dims.orientation)
                 val pos = PositionedTile(
@@ -311,7 +365,21 @@ object BoardLayout {
                 )
                 positioned.add(pos)
                 posById[placed.tile.id] = pos
-                occupiedRects.add(rectFor(pos.x, pos.y, pos.width, pos.height))
+                occupiedEntries.add(placed.tile.id to rectFor(pos.x, pos.y, pos.width, pos.height))
+                if (modeHasSpinner && placed.tile.id == board.spinnerTileId) {
+                    stubRects[BranchDir.UP] = rectFor(
+                        pos.x,
+                        pos.y - (pos.height / 2f + TILE_GAP + TILE_LONG / 2f),
+                        TILE_SHORT,
+                        TILE_LONG
+                    )
+                    stubRects[BranchDir.DOWN] = rectFor(
+                        pos.x,
+                        pos.y + (pos.height / 2f + TILE_GAP + TILE_LONG / 2f),
+                        TILE_SHORT,
+                        TILE_LONG
+                    )
+                }
                 cursor = CursorState(adv.cx, adv.cy, adv.heading, pos)
             }
             armCursors[branch] = cursor
@@ -348,7 +416,7 @@ object BoardLayout {
             .sortedBy { it.second.size }
         for ((branch, list) in vertArms) {
             val initialHeading = if (branch == BranchDir.UP) Heading.N else Heading.S
-            layoutArm(branch, list, spinnerPos, initialHeading, spinnerPos.x, spinnerPos.y)
+            layoutArm(branch, list, spinnerPos, initialHeading, spinnerPos.x, spinnerPos.y, spinnerFallback = spinnerPos)
         }
 
         val hasSpinner = spinnerPlaced != null && posById.containsKey(spinnerPlaced.tile.id)
@@ -358,7 +426,14 @@ object BoardLayout {
         val openEnds = DominoEngine.getOpenEnds(board, mode)
         for (end in openEnds) {
             val cursor = armCursors[end.branch] ?: continue
-            val adv = advanceCompact(cursor, null, occupiedRects, anchorX, anchorY)
+            val adv = advanceCompact(
+                cursor,
+                null,
+                occupiedEntries,
+                anchorX,
+                anchorY,
+                spinnerFallback = if (hasSpinner) spinnerPos else null
+            )
             val dims = tileDimensions(adv.heading, false)
             dropZones.add(
                 PositionedDropZone(
@@ -370,7 +445,7 @@ object BoardLayout {
                     heading = adv.heading
                 )
             )
-            occupiedRects.add(rectFor(adv.cx, adv.cy, dims.width, dims.height))
+            occupiedEntries.add("dz_${end.branch.name}" to rectFor(adv.cx, adv.cy, dims.width, dims.height))
         }
 
         // Pin active spinner at (0, 0) so it never drifts off-center
