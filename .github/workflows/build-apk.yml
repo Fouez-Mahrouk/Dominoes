@@ -22,6 +22,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android SDK licenses
+      - name: Build
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --   
+          GRADLEW=$(find . -name "gradlew" -type f | head -1)
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew not found!"
+            exit 1
+          fi
+          echo "Found: $GRADLEW"
+          cd $(dirname $GRADLEW)
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        run: |
+          APK_PATH=$(find . -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No APK found!"
+            exit 1
+          fi
+          echo "APK: $APK_PATH ($(du -h "$APK_PATH" | cut -f1))"
+          mkdir -p ./apk-output
+          cp "$APK_PATH" ./apk-output/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dominoes-debug-apk
+          path: ./apk-output/
+          retention-days: 30   
