@@ -22,19 +22,33 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build
+      - name: Decode keystore
+        run: |
+          mkdir -p ~/keystore
+          echo '${{ secrets.KEYSTORE_FILE }}' | base64 -d > ~/keystore/dominoes-release.jks
+
+      - name: Build signed APK
         run: |
           GRADLEW=$(find . -name "gradlew" -type f | head -1)
           if [ -z "$GRADLEW" ]; then
             echo "ERROR: gradlew not found!"
             exit 1
           fi
-          echo "Found: $GRADLEW"
           cd $(dirname $GRADLEW)
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace \
+            -PkeystorePassword=${{ secrets.KEYSTORE_PASSWORD }} \
+            -PkeyAlias=${{ secrets.KEY_ALIAS }} \
+            -PkeyPassword=${{ secrets.KEY_PASSWORD }}
 
-      - name: Upload APK
+      - name: Fallback to debug
+        if: failure()
+        run: |
+          GRADLEW=$(find . -name "gradlew" -type f | head -1)
+          cd $(dirname $GRADLEW)
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Find and upload APK
         run: |
           APK_PATH=$(find . -name "*.apk" -type f | head -1)
           if [ -z "$APK_PATH" ]; then
@@ -43,11 +57,11 @@ jobs:
           fi
           echo "APK: $APK_PATH ($(du -h "$APK_PATH" | cut -f1))"
           mkdir -p ./apk-output
-          cp "$APK_PATH" ./apk-output/
+          cp "$APK_PATH" ./apk-output/Dominoes.apk
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dominoes-debug-apk
+          name: dominoes-release-apk
           path: ./apk-output/
           retention-days: 30   
