@@ -27,7 +27,7 @@ jobs:
           mkdir -p ~/keystore
           echo '${{ secrets.KEYSTORE_FILE }}' | base64 -d > ~/keystore/dominoes-release.jks
 
-      - name: Build signed APK
+      - name: Build signed release APK
         run: |
           GRADLEW=$(find . -name "gradlew" -type f | head -1)
           if [ -z "$GRADLEW" ]; then
@@ -41,18 +41,11 @@ jobs:
             -PkeyAlias=${{ secrets.KEY_ALIAS }} \
             -PkeyPassword=${{ secrets.KEY_PASSWORD }}
 
-      - name: Fallback to debug
-        if: failure()
+      - name: Verify APK exists
         run: |
-          GRADLEW=$(find . -name "gradlew" -type f | head -1)
-          cd $(dirname $GRADLEW)
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Find and upload APK
-        run: |
-          APK_PATH=$(find . -name "*.apk" -type f | head -1)
+          APK_PATH=$(find . -path "*/release/*" -name "*.apk" -type f | head -1)
           if [ -z "$APK_PATH" ]; then
-            echo "ERROR: No APK found!"
+            echo "ERROR: Release APK not found. Build failed."
             exit 1
           fi
           echo "APK: $APK_PATH ($(du -h "$APK_PATH" | cut -f1))"
