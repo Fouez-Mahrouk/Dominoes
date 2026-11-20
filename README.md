@@ -6,15 +6,15 @@ A clean, offline, ad-free dominoes game. No tracking. No data collection. No int
 
 | Light Mode | Dark Mode |
 |:---:|:---:|
-| ![Light Mode](screenshots/game-light.png) | ![Dark Mode](screenshots/game-dark.png) |
+| ![Light Mode](Screenshots/Game-light.png) | ![Dark Mode](Screenshots/Game-dark.png) |
 
 | Start Screen | Scoring |
 |:---:|:---:|
-| ![Start Screen](screenshots/start-screen.png) | ![Scoring](screenshots/scoring.png) |
+| ![Start Screen](Screenshots/Start-screen.png) | ![Scoring](Screenshots/Scoring.png) |
 
 | Settings |
 |:---:|
-| ![Settings](screenshots/settings.png) |
+| ![Settings](Screenshots/Settings.png) |
 
 ## Features
 
