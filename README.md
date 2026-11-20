@@ -52,7 +52,7 @@ A clean, offline, ad-free dominoes game. No tracking. No data collection. No int
 
 Requires JDK 17 + Android SDK 35.
 
-```bash
+
 cd android
 ./gradlew assembleRelease   
 
