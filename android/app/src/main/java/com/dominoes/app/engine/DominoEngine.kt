@@ -775,6 +775,33 @@ object DominoEngine {
         )
     }
 
+    /** Average points the opponents could score on their next play, estimated
+        over the tiles this player cannot see. Used by the Hard AI to avoid
+        setting up scoring plays. */
+    private fun opponentThreat(board: BoardBranches, unseen: List<DominoTile>, mode: GameMode): Double {
+        if (unseen.isEmpty()) return 0.0
+        val ends = getOpenEnds(board, mode)
+        var total = 0.0
+        for (t in unseen) {
+            var best = 0
+            for (e in ends) {
+                if (!tileCanMatchEnd(t, e)) continue
+                val after = placeTileOnBoard(
+                    board = board,
+                    tile = t,
+                    target = PlayTarget.fromBranch(e.branch),
+                    playerId = -1,
+                    sequence = 0,
+                    mode = mode
+                )
+                val pts = calculatePlayScore(getOpenEndsSum(after, mode), mode).points
+                if (pts > best) best = pts
+            }
+            total += best
+        }
+        return total / unseen.size
+    }
+
     fun chooseAIMove(state: MatchState): AIDecision {
         val currentPlayer = state.players[state.currentPlayerIndex]
         val legal = getLegalMoves(currentPlayer.hand, state.board, state.mode)
@@ -790,6 +817,23 @@ object DominoEngine {
         if (state.difficulty == Difficulty.EASY) {
             return AIDecision.Play(legal[Random.nextInt(legal.size)])
         }
+
+        // Hard AI: tiles it cannot see (not in its own hand, not on the board).
+        // Opponents hold these tiles or they are still in the boneyard.
+        val hard = state.difficulty == Difficulty.HARD
+        val unseen: List<DominoTile> = if (hard) {
+            val seen = HashSet<String>()
+            currentPlayer.hand.forEach { seen.add(it.id) }
+            val b = state.board
+            b.root?.let { seen.add(it.tile.id) }
+            (b.left + b.right + b.up + b.down).forEach { seen.add(it.tile.id) }
+            createDoubleSixSet().filter { it.id !in seen }
+        } else {
+            emptyList()
+        }
+        // Blocking matters more when nobody can draw.
+        val blockWeight = if (metaFor(state.mode).hasBoneyard) 10.0 else 14.0
+        val scoringMode = !isRoundBasedMode(state.mode)
 
         data class ScoredMove(val move: LegalMove, val utility: Double)
 
@@ -807,20 +851,32 @@ object DominoEngine {
             val pipWeight = (move.tile.a + move.tile.b).toDouble()
             val isDoubleBonus = if (move.tile.a == move.tile.b) 3.5 else 0.0
 
-            var flexibility = 0.0
-            if (state.difficulty == Difficulty.HARD) {
+            var extra = 0.0
+            if (hard) {
                 if (currentPlayer.score + scoreRes.points >= state.targetScore) {
                     return@map ScoredMove(move, 10000.0 + scoreRes.points)
                 }
                 val remaining = currentPlayer.hand.filterNot { it.id == move.tile.id }
                 val nextEnds = getOpenEnds(simBoard, state.mode)
+                // Keep my own hand playable.
                 val matchingCount = remaining.count { t ->
                     nextEnds.any { e -> tileCanMatchEnd(t, e) }
                 }
-                flexibility = matchingCount * 2.5
+                extra += matchingCount * 2.5
+                // Prefer plays that leave opponents unable to match the open ends.
+                if (unseen.isNotEmpty()) {
+                    val stuck = unseen.count { t ->
+                        nextEnds.none { e -> tileCanMatchEnd(t, e) }
+                    }.toDouble() / unseen.size
+                    extra += stuck * blockWeight
+                    // Avoid handing opponents an easy score.
+                    if (scoringMode) {
+                        extra -= opponentThreat(simBoard, unseen, state.mode) * 1.5
+                    }
+                }
             }
 
-            val utility = scoreRes.points * 12.0 + pipWeight * 0.8 + isDoubleBonus + flexibility
+            val utility = scoreRes.points * 12.0 + pipWeight * 0.8 + isDoubleBonus + extra
             ScoredMove(move, utility)
         }.sortedByDescending { it.utility }
 
