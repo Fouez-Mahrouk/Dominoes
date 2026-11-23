@@ -76,7 +76,7 @@ fun PassDeviceDialog(
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = palette.background,
-            border = BorderStroke(1.dp, palette.divider),
+            border = BorderStroke(palette.borderWidth, palette.divider),
             shadowElevation = 12.dp
         ) {
             Column(
@@ -145,7 +145,7 @@ fun ModeTipDialog(
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = palette.background,
-            border = BorderStroke(1.dp, palette.divider),
+            border = BorderStroke(palette.borderWidth, palette.divider),
             shadowElevation = 12.dp
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
@@ -219,7 +219,7 @@ fun ModeTipDialog(
                         }
                         Text(
                             text = exampleText,
-                            color = palette.textPrimary,
+                            color = palette.onBoardWell,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center
@@ -267,7 +267,7 @@ fun RoundSummaryDialog(
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = palette.background,
-            border = BorderStroke(1.dp, palette.divider),
+            border = BorderStroke(palette.borderWidth, palette.divider),
             shadowElevation = 12.dp
         ) {
             Column(
@@ -403,7 +403,7 @@ fun GameOverDialog(
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = palette.background,
-            border = BorderStroke(1.dp, palette.divider),
+            border = BorderStroke(palette.borderWidth, palette.divider),
             shadowElevation = 14.dp
         ) {
             Column(
@@ -554,7 +554,7 @@ fun QuitGameDialog(
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = palette.background,
-            border = BorderStroke(1.dp, palette.divider),
+            border = BorderStroke(palette.borderWidth, palette.divider),
             shadowElevation = 12.dp
         ) {
             Column(modifier = Modifier.padding(24.dp)) {

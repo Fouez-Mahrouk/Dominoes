@@ -34,6 +34,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -360,7 +361,7 @@ fun GameBoardScreen(
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = palette.surfaceCard,
-                        border = BorderStroke(1.dp, palette.divider)
+                        border = BorderStroke(palette.borderWidth, palette.divider)
                     ) {
                         Text(
                             text = "${modeMeta.name} · R${match.roundNumber}",
@@ -459,6 +460,11 @@ fun GameBoardScreen(
                     .weight(1f)
                     .clip(RoundedCornerShape(24.dp))
                     .background(palette.boardWell)
+                    .border(
+                        width = palette.borderWidth,
+                        color = Color(0xFFFFC233).copy(alpha = if (palette.highContrast) 0.85f else 0.22f),
+                        shape = RoundedCornerShape(24.dp)
+                    )
                     .onSizeChanged { size ->
                         boardViewportWidthPx = size.width.toFloat()
                         boardViewportHeightPx = size.height.toFloat()
@@ -484,7 +490,7 @@ fun GameBoardScreen(
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = if (palette.isDark) 0.03f else 0.05f),
+                                if (palette.highContrast) Color.White.copy(alpha = 0.03f) else Color(0xFFFFC233).copy(alpha = if (palette.isDark) 0.08f else 0.10f),
                                 Color.Transparent,
                                 Color.Black.copy(alpha = if (palette.isDark) 0.24f else 0.16f)
                             ),
@@ -728,7 +734,7 @@ fun GameBoardScreen(
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = palette.surfaceElevated.copy(alpha = 0.88f),
-                            border = BorderStroke(1.dp, palette.divider),
+                            border = BorderStroke(palette.borderWidth, palette.divider),
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .padding(top = 8.dp)
@@ -789,22 +795,28 @@ fun GameBoardScreen(
                                 .graphicsLayer { alpha = scoreAlpha.value },
                             contentAlignment = Alignment.Center
                         ) {
-                            val shadowPx = with(density) { 1.dp.toPx() }
-                            Text(
-                                text = scoreLabel,
-                                style = TextStyle(
-                                    color = Color(0xFFFFC107),
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    shadow = Shadow(
-                                        color = Color(0xFF000000).copy(
-                                            alpha = if (palette.isDark) 0.50f else 0.30f
-                                        ),
-                                        offset = Offset(0f, shadowPx),
-                                        blurRadius = shadowPx
+                            // Ink pill: readable over any tile or table colour.
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0xE6141109))
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color(0xFFFFC233).copy(alpha = 0.55f),
+                                        shape = RoundedCornerShape(50)
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = scoreLabel,
+                                    style = TextStyle(
+                                        color = Color(0xFFFFC233),
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.ExtraBold
                                     )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -825,7 +837,7 @@ fun GameBoardScreen(
                 Surface(
                     shape = RoundedCornerShape(18.dp),
                     color = palette.surfaceCard,
-                    border = BorderStroke(1.dp, palette.divider),
+                    border = BorderStroke(palette.borderWidth, palette.divider),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -869,7 +881,7 @@ fun GameBoardScreen(
             Surface(
                 shape = RoundedCornerShape(22.dp),
                 color = palette.surfaceCard,
-                border = BorderStroke(1.dp, palette.divider),
+                border = BorderStroke(palette.borderWidth, palette.divider),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 BoxWithConstraints(
@@ -1063,7 +1075,7 @@ private fun RoundWinCelebrationOverlay(
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = palette.surfaceElevated.copy(alpha = 0.96f),
-                    border = BorderStroke(1.5.dp, palette.amberHighlight),
+                    border = BorderStroke(palette.borderWidth * 1.5f, palette.amberHighlight),
                     shadowElevation = 14.dp
                 ) {
                     Row(

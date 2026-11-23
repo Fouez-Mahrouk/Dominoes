@@ -347,7 +347,7 @@ fun HowToPlayScreen(modifier: Modifier = Modifier) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = guide.exampleLabel,
-                            color = palette.textPrimary,
+                            color = palette.onBoardWell,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center
